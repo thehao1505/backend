@@ -9,63 +9,34 @@ import { BaseEntity } from './base.entity'
   _id: false,
 })
 export class Post extends BaseEntity {
-  @Prop({
-    type: String,
-  })
+  @Prop({ type: String })
   content: string
 
-  @Prop({
-    type: [String],
-  })
+  @Prop({ type: [String] })
   images: string[]
 
-  @Prop({
-    type: String,
-    ref: 'User',
-  })
+  @Prop({ type: String, ref: 'User' })
   author: string
 
-  @Prop({
-    type: [String],
-    ref: 'User',
-    default: [],
-  })
+  @Prop({ type: [String], ref: 'User', default: [] })
   likes: string[]
 
-  @Prop({
-    type: Boolean,
-    default: false,
-  })
+  @Prop({ type: Boolean, default: false })
   isHidden: boolean
 
-  @Prop({
-    type: Boolean,
-    default: false,
-  })
+  @Prop({ type: Boolean, default: false })
   isEmbedded: boolean
 
-  @Prop({
-    type: Date,
-    default: null,
-  })
+  @Prop({ type: Date, default: null })
   lastEmbeddedAt: Date
 
-  @Prop({
-    type: [String],
-    default: [],
-  })
+  @Prop({ type: [String], default: [] })
   categories: string[]
 
-  @Prop({
-    type: String,
-    ref: 'Post',
-  })
+  @Prop({ type: String, ref: 'Post' })
   parentId: string
 
-  @Prop({
-    type: Boolean,
-    default: false,
-  })
+  @Prop({ type: Boolean, default: false })
   isReply: boolean
 }
 export const PostSchema = SchemaFactory.createForClass(Post)

@@ -11,24 +11,15 @@ export class BaseEntity extends Document {
   createdAt: Date
   updatedAt: Date
 
-  @Prop({
-    type: Boolean,
-    default: false,
-  })
+  @Prop({ type: Boolean, default: false })
   isDeleted: boolean
 
-  @Prop({
-    type: Date,
-  })
+  @Prop({ type: Date })
   deletedAt: Date
 
-  @Prop({
-    type: String,
-  })
+  @Prop({ type: String })
   createdBy: string
 
-  @Prop({
-    type: String,
-  })
+  @Prop({ type: String })
   updatedBy: string
 }

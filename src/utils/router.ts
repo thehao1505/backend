@@ -7,6 +7,7 @@ import {
   NotificationModule,
   RecommendationModule,
   QdrantModule,
+  PostViewModule,
 } from '@modules'
 import { Routes } from '@nestjs/core'
 
@@ -22,6 +23,7 @@ export const routes: Routes = [
       { path: '/notifications', module: NotificationModule },
       { path: '/recommendations', module: RecommendationModule },
       { path: '/qdrant', module: QdrantModule },
+      { path: '/post-view', module: PostViewModule },
     ],
   },
 ]

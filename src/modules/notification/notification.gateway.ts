@@ -22,7 +22,6 @@ export class NotificationGateway implements OnGatewayConnection, OnGatewayDiscon
       this.users.set(userId, client.id)
       if (userId) {
         client.join(`user:${userId}`)
-        console.log(`✅ Client connected: ${userId}. Joined room: user:${userId}`)
       }
     } catch (error) {
       console.log(`❌ Connection rejected: ${error.message}`)
@@ -34,7 +33,6 @@ export class NotificationGateway implements OnGatewayConnection, OnGatewayDiscon
     const userId = Array.from(this.users.entries()).find(([_, socketId]) => socketId === client.id)?.[0]
     if (userId) {
       this.users.delete(userId)
-      console.log(`Client disconnected: ${userId}`)
     }
   }
 

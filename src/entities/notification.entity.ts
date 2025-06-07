@@ -16,38 +16,22 @@ export enum NotificationType {
   _id: false,
 })
 export class Notification extends BaseEntity {
-  @Prop({
-    required: true,
-    enum: NotificationType,
-  })
+  @Prop({ required: true, enum: NotificationType })
   type: NotificationType
 
-  @Prop({
-    required: true,
-    ref: 'User',
-  })
+  @Prop({ required: true, ref: 'User' })
   recipientId: string
 
-  @Prop({
-    required: true,
-    ref: 'User',
-  })
+  @Prop({ required: true, ref: 'User' })
   senderId: string
 
-  @Prop({
-    default: null,
-    ref: 'Post',
-  })
+  @Prop({ default: null, ref: 'Post' })
   postId?: string
 
-  @Prop({
-    default: false,
-  })
+  @Prop({ default: false })
   isRead: boolean
 
-  @Prop({
-    type: Object,
-  })
+  @Prop({ type: Object })
   metadata: Record<string, any>
 }
 

@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-unused-vars */
-import { MessageService } from '@modules/index-service'
+import { MessageService, UserService } from '@modules/index-service'
 import { Logger } from '@nestjs/common'
 import {
   WebSocketGateway,
@@ -25,6 +25,7 @@ export class MessageGateway implements OnGatewayConnection, OnGatewayDisconnect 
   private users: Map<string, string> = new Map()
 
   constructor(
+    private readonly userService: UserService,
     private readonly messageService: MessageService,
     private readonly jwtService: JwtService,
   ) {}
@@ -64,14 +65,17 @@ export class MessageGateway implements OnGatewayConnection, OnGatewayDisconnect 
   ) {
     const senderId = client.data.userId
 
-    const message = await this.messageService.createMessage({
+    const createdMessage = await this.messageService.createMessage({
       sender: senderId,
       receiver: payload.receiverId,
       content: payload.content,
     })
 
+    const message = await createdMessage.populate('sender', 'username avatar')
+
     const receiverSocketId = this.users.get(payload.receiverId)
     if (receiverSocketId) {
+      const sender = await this.userService.getUser(senderId)
       this.server.to(receiverSocketId).emit('newMessage', message)
     }
 

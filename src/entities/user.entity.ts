@@ -11,108 +11,58 @@ import { configs } from '@utils/configs'
   _id: false,
 })
 export class User extends BaseEntity {
-  @Prop({
-    type: String,
-    required: true,
-  })
+  @Prop({ type: String, required: true })
   username: string
 
-  @Prop({
-    type: String,
-    default: configs.defaultAvatar,
-  })
+  @Prop({ type: String, default: configs.defaultAvatar })
   avatar: string
 
-  @Prop({
-    type: String,
-  })
+  @Prop({ type: String })
   firstName: string
 
-  @Prop({
-    type: String,
-  })
+  @Prop({ type: String })
   lastName: string
 
-  @Prop({
-    type: String,
-  })
+  @Prop({ type: String })
   fullName: string
 
-  @Prop({
-    type: Date,
-  })
+  @Prop({ type: Date })
   dob: Date
 
-  @Prop({
-    type: String,
-    required: true,
-  })
+  @Prop({ type: String, required: true })
   email: string
 
-  @Prop({
-    type: String,
-  })
+  @Prop({ type: String })
   address: string
 
-  @Prop({
-    type: String,
-  })
+  @Prop({ type: String })
   password: string
 
-  @Prop({
-    type: Date,
-    default: null,
-  })
+  @Prop({ type: Date, default: null })
   passwordChangeAt: Date
 
-  @Prop({
-    type: String,
-    default: null,
-  })
+  @Prop({ type: String, default: null })
   passwordResetToken: string
 
-  @Prop({
-    type: Date,
-    default: null,
-  })
+  @Prop({ type: Date, default: null })
   passwordResetExpires: Date
 
-  @Prop({
-    type: [String],
-    ref: 'User',
-    default: [],
-  })
+  @Prop({ type: [String], ref: 'User', default: [] })
   followings: string[]
 
-  @Prop({
-    type: [String],
-    ref: 'User',
-    default: [],
-  })
+  @Prop({ type: [String], ref: 'User', default: [] })
   followers: string[]
 
-  @Prop({
-    type: Boolean,
-    default: true,
-  })
+  @Prop({ type: Boolean, default: true })
   isPublic: boolean
 
-  @Prop({
-    type: String,
-    default: null,
-  })
+  @Prop({ type: String, default: null })
   shortDescription: string
 
-  @Prop({
-    type: Boolean,
-    default: false,
-  })
+  @Prop({ type: Boolean, default: false })
   isEmbedded: boolean
 
-  @Prop({
-    type: Date,
-    default: null,
-  })
+  @Prop({ type: Date, default: null })
   lastEmbeddedAt: Date
 }
 export const UserSchema = SchemaFactory.createForClass(User)
