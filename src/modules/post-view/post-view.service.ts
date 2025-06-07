@@ -8,14 +8,24 @@ export class PostViewService {
   constructor(@InjectModel(PostView.name) private readonly postViewModel: Model<PostView>) {}
 
   async recordPostView(userId: string, postId: string) {
-    const recentlyViewed = await this.postViewModel.findOne({
-      userId,
-      postId,
-      viewedAt: { $gte: new Date(Date.now() - 10 * 60 * 1000) },
-    })
+    if (!userId || !postId) {
+      throw new Error('userId and postId are required')
+    }
 
-    if (!recentlyViewed) {
-      await this.postViewModel.create({ userId, postId })
+    try {
+      const recentlyViewed = await this.postViewModel.findOne({
+        userId,
+        postId,
+        viewedAt: { $gte: new Date(Date.now() - 10 * 60 * 1000) },
+      })
+
+      if (!recentlyViewed) {
+        await this.postViewModel.create({ userId, postId })
+        return true
+      }
+      return false
+    } catch (error) {
+      throw new Error(`Failed to record post view: ${error.message}`)
     }
   }
 }
