@@ -28,4 +28,8 @@ export class MessageService {
       .limit(limit)
       .lean()
   }
+
+  async markAsReadMessageOfConnection(messageIds: string[]) {
+    return await this.messageModel.updateMany({ _id: { $in: messageIds }, isRead: false }, { $set: { isRead: true } })
+  }
 }

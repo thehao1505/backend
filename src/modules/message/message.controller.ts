@@ -16,4 +16,9 @@ export class MessageController {
   async getConversation(@Req() req: Request, @Query() getConversationDto: GetConversationDto) {
     return this.messageService.getConversation(req.user['_id'], getConversationDto)
   }
+
+  @Get('/read-message')
+  async markAsReadMessageOfConnection(messageIds: string[]) {
+    return await this.markAsReadMessageOfConnection(messageIds)
+  }
 }

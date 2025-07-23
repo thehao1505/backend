@@ -45,7 +45,8 @@ export class NotificationService {
   async getUserNotifications(userId: string, queryDto: NotificationQueryDto) {
     const { page, limit } = queryDto
     const skip = (page - 1) * limit
-    return this.notificationModel
+
+    const notifications = await this.notificationModel
       .find({ recipientId: userId })
       .populate('senderId', 'avatar username followers followings')
       .populate('postId', 'content likes')
@@ -53,6 +54,12 @@ export class NotificationService {
       .skip(skip)
       .limit(limit)
       .exec()
+
+    const notificationIds = notifications.map(n => n._id)
+
+    await this.notificationModel.updateMany({ _id: { $in: notificationIds }, isRead: false }, { $set: { isRead: true } })
+
+    return notifications
   }
 
   async getUnreadCount(userId: string) {
