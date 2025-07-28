@@ -28,7 +28,7 @@ export class PostService {
   }
 
   async countReplyPost(postId: string) {
-    return await this.postModel.countDocuments({ parentId: postId })
+    return await this.postModel.countDocuments({ parentId: postId, isReply: true })
   }
 
   async updatePost(id: string, updatePostDto: UpdatePostDto) {
@@ -36,7 +36,7 @@ export class PostService {
   }
 
   async getPosts(queryDto: QueryDto) {
-    const { author, page, limit, sort } = queryDto
+    const { author, parentId, page, limit, sort } = queryDto
 
     let sortObject = {}
     if (sort) {
@@ -45,8 +45,9 @@ export class PostService {
       sortObject = { createdAt: -1 }
     }
     const authorFilter = author ? { author: author } : {}
+    const replyPostFilter = parentId ? { parentId: parentId, isReply: true } : { isReply: false }
     return await this.postModel
-      .find({ isHidden: false, isDeleted: false, ...authorFilter })
+      .find({ isHidden: false, isDeleted: false, ...replyPostFilter, ...authorFilter })
       .populate('author', 'username avatar')
       .skip((page - 1) * limit)
       .limit(limit)

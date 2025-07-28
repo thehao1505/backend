@@ -19,6 +19,11 @@ export class PostController {
     return (await this.postService.createPost(req.user['_id'], createPostDto)).populate('author', 'username avatar')
   }
 
+  @Get(':id/amount-reply-post')
+  async getAmountReplyPost(@Param('id') id: string) {
+    return await this.postService.countReplyPost(id)
+  }
+
   @Get(':id')
   async getPost(@Req() req: Request, @Param('id') id: string) {
     return this.postService.getPost(req.user['_id'], id)
