@@ -28,7 +28,7 @@ export class RecommendationService {
   private async trackMetric(metricName: string, value: number = 1) {
     const key = `${this.METRICS_PREFIX}${metricName}`
     await this.redisService.client.incrby(key, value)
-    await this.redisService.client.expire(key, 60 * 60 * 24) // 24 hours TTL
+    await this.redisService.client.expire(key, 60 * 60 * 24)
   }
 
   private async trackRecommendationMetrics(userId: string, recommendations: Post[], source: string) {

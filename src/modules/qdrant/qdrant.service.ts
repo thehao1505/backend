@@ -17,7 +17,6 @@ export class QdrantService implements OnModuleInit {
 
   private async initializeCollection() {
     try {
-      // Check if collection exists
       const collections = await this.client.getCollections()
       const postCollectionExists = collections.collections.some(collection => collection.name === configs.postCollectionName)
       const userCollectionExists = collections.collections.some(collection => collection.name === configs.userCollectionName)
