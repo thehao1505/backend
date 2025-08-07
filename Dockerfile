@@ -14,8 +14,5 @@ COPY . .
 # Build NestJS project
 RUN npm run build
 
-# Expose port (make sure app uses process.env.PORT or 8080)
-EXPOSE 8080
-
 # Run the app
 CMD ["node", "dist/main"]
