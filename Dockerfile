@@ -1,18 +1,23 @@
-# Base image
-FROM node:22-alpine
-
-# Set working directory
+# --- Base (định nghĩa biến dùng lại)
+FROM  node:22-alpine AS base
 WORKDIR /app
 
-# Copy package files and install dependencies first (use Docker layer caching)
+# --- Cài deps (bao gồm dev deps để build)
+FROM base AS deps
 COPY package*.json ./
-RUN npm install
+RUN npm ci
 
-# Copy source code
+# --- Build NestJS (transpile TS -> dist)
+FROM deps AS build
 COPY . .
-
-# Build NestJS project
 RUN npm run build
 
-# Run the app
-CMD ["node", "dist/main"]
+# --- Runtime (chỉ prod deps + dist)
+FROM node:22-alpine AS runner
+ENV NODE_ENV=production
+WORKDIR /app
+COPY package*.json ./
+RUN npm ci --omit=dev
+COPY --from=build /app/dist ./dist
+EXPOSE 3000
+CMD ["node", "dist/main.js"]

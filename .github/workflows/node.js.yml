@@ -43,3 +43,5 @@ jobs:
     - name: Start or reload app with PM2
       run: |
         npx pm2 start dist/main.js --name nestjs-app || npx pm2 reload nestjs-app
+
+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
