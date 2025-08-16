@@ -22,8 +22,8 @@ services:
       context: .
       dockerfile: Dockerfile
     container_name: capstone_service
-    depends_on:
-      - redis
+    # depends_on:
+    #   - redis
     restart: always
     env_file:
       - .env
