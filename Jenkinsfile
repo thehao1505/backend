@@ -9,7 +9,7 @@ pipeline {
   stages {
     stage('Checkout') {
       steps {
-        git branch: 'main', url: 'git@github.com:thehao1505/backend.gitt'
+        git branch: 'main', url: 'git@github.com:thehao1505/backend.git'
       }
     }
 
