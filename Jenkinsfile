@@ -1,10 +1,10 @@
 pipeline {
   agent any
 
-  environment {
-    DOCKER_IMAGE = "thehao155/backend"
-    DOCKER_TAG   = "latest"
-  }
+  // environment {
+  //   DOCKER_IMAGE = "thehao155/backend"
+  //   DOCKER_TAG   = "latest"
+  // }
 
   stages {
     // stage('Checkout') {
@@ -15,8 +15,7 @@ pipeline {
 
     stage('Prepare .env') {
       steps {
-        withCredentials([file(credentialsId: 'secretfile', variable: 'ENV_FILE')]) {
-          // Copy secretfile thành .env trong workspace
+        withCredentials([file(credentialsId: 'env.prod.be', variable: 'ENV_FILE')]) {
           sh 'cp $ENV_FILE .env'
         }
       }
