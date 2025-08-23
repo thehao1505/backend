@@ -49,7 +49,7 @@ export class NotificationService {
     const notifications = await this.notificationModel
       .find({ recipientId: userId })
       .populate('senderId', 'avatar username followers followings')
-      .populate('postId', 'content likes')
+      .populate('postId', 'content likes parentId')
       .sort({ createdAt: -1 })
       .skip(skip)
       .limit(limit)
