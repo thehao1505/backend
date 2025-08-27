@@ -16,7 +16,7 @@ export class PostController {
   @Post()
   @UseInterceptors(PostEmbeddingInterceptor)
   async createPost(@Req() req: Request, @Body() createPostDto: CreatePostDto) {
-    return (await this.postService.createPost(req.user['_id'], createPostDto)).populate('author', 'username avatar')
+    return await this.postService.createPost(req.user['_id'], createPostDto)
   }
 
   @Get(':id/amount-reply-post')

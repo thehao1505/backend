@@ -21,15 +21,16 @@ export class PostService {
       const parentPost = await this.postModel.findById(createPostDto.parentId)
       if (!parentPost) throw new NotFoundException('Parent post not found')
 
-      await this.postModel.create({ ...createPostDto, isReply: true, author: author })
+      const post = await this.postModel.create({ ...createPostDto, isReply: true, author: author })
       await this.notificationService.createNotification({
         type: NotificationType.POST_REPLY,
         recipientId: parentPost.author,
         senderId: author,
         postId: parentPost._id,
       })
+      return post.populate('author', 'username avatar')
     } else {
-      return await this.postModel.create({ ...createPostDto, author: author })
+      return (await this.postModel.create({ ...createPostDto, author: author })).populate('author', 'username avatar')
     }
   }
 
