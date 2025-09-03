@@ -6,6 +6,9 @@ import { NotificationService, RedisService, UserService } from '@modules/index-s
 import { CreatePostDto, UpdatePostDto } from '@dtos/post.dto'
 import { QueryDto } from '@dtos/post.dto'
 import { configs } from '@utils/configs/config'
+import { InjectQueue } from '@nestjs/bullmq'
+import { Queue } from 'bullmq'
+import { NotificationPayload } from '@dtos/notification.dto'
 
 @Injectable()
 export class PostService {
@@ -14,6 +17,7 @@ export class PostService {
     @Inject(forwardRef(() => RedisService)) private readonly redisService: RedisService,
     @Inject(forwardRef(() => NotificationService)) private readonly notificationService: NotificationService,
     @Inject(forwardRef(() => UserService)) private readonly userService: UserService,
+    @InjectQueue('notifications') private notificationQueue: Queue,
   ) {}
 
   async createPost(author: string, createPostDto: CreatePostDto) {
@@ -22,12 +26,16 @@ export class PostService {
       if (!parentPost) throw new NotFoundException('Parent post not found')
 
       const post = await this.postModel.create({ ...createPostDto, isReply: true, author: author })
-      await this.notificationService.createNotification({
+
+      const payload = {
         type: NotificationType.POST_REPLY,
         recipientId: parentPost.author,
         senderId: author,
         postId: parentPost._id,
-      })
+      } as NotificationPayload
+
+      await this.notificationQueue.add('send-notification', payload)
+
       return post.populate('author', 'username avatar')
     } else {
       return (await this.postModel.create({ ...createPostDto, author: author })).populate('author', 'username avatar')

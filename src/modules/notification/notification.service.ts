@@ -2,8 +2,6 @@ import { Injectable } from '@nestjs/common'
 import { InjectModel } from '@nestjs/mongoose'
 import { Model } from 'mongoose'
 import { Notification, NotificationType, NotificationDocument } from '../../entities/notification.entity'
-import { InjectQueue } from '@nestjs/bull'
-import { Queue } from 'bull'
 import { NotificationGateway } from './notification.gateway'
 import { NotificationQueryDto } from '@dtos/notification.dto'
 
@@ -13,7 +11,6 @@ export class NotificationService {
     @InjectModel(Notification.name)
     private notificationModel: Model<NotificationDocument>,
     private readonly notificationGateway: NotificationGateway,
-    @InjectQueue('notifications') private notificationQueue: Queue,
   ) {}
 
   async createNotification(data: {
@@ -28,10 +25,6 @@ export class NotificationService {
       .findById(initNotification._id)
       .populate('senderId', 'avatar username followers followings')
       .populate('postId', 'content likes')
-
-    await this.notificationQueue.add('process-notification', {
-      notificationId: notification._id,
-    })
 
     this.notificationGateway.sendToUser(data.recipientId, notification)
 

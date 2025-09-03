@@ -1,28 +1,29 @@
-import { Process, Processor } from '@nestjs/bull'
-import { Logger } from '@nestjs/common'
-import { Job } from 'bull'
-import { InjectModel } from '@nestjs/mongoose'
-import { Model } from 'mongoose'
-import { NotificationDocument } from '@entities'
+import { Processor, WorkerHost } from '@nestjs/bullmq'
+import { forwardRef, Inject, Injectable, Logger } from '@nestjs/common'
+import { Job } from 'bullmq'
+import { NotificationService } from '@modules/index-service'
+import { NotificationPayload } from '@dtos/notification.dto'
 
 @Processor('notifications')
-export class NotificationProcessor {
+@Injectable()
+export class NotificationProcessor extends WorkerHost {
   private readonly logger = new Logger(NotificationProcessor.name)
+  constructor(@Inject(forwardRef(() => NotificationService)) private readonly notificationService: NotificationService) {
+    super()
+  }
 
-  constructor(
-    @InjectModel('Notification')
-    private notificationModel: Model<NotificationDocument>,
-  ) {}
+  async process(job: Job<any, any, string>): Promise<any> {
+    switch (job.name) {
+      case 'send-notification':
+        await this.handleNotification(job.data)
+    }
+  }
 
-  @Process('process-notification')
-  async handleNotification(job: Job<{ notificationId: string }>) {
+  private async handleNotification(data: NotificationPayload) {
     this.logger.debug('Processing notification...')
 
     try {
-      const notification = await this.notificationModel.findById(job.data.notificationId)
-      if (!notification) {
-        throw new Error('Notification not found')
-      }
+      const notification = await this.notificationService.createNotification(data)
 
       this.logger.debug(`Notification ${notification._id} processed successfully`)
     } catch (error) {
