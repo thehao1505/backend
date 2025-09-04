@@ -73,7 +73,6 @@ export class AuthService {
     await user.save()
 
     try {
-      // TODO: refactor this
       const resetUrl = `${configs.nextAppUrl}/reset-password/${resetToken}`
       return await this.mailService.sendMail(email, 'Reset Password', `${resetUrl}`)
     } catch (error) {
