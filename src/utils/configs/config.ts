@@ -38,4 +38,8 @@ export const configs = {
   vectorSize: process.env.VECTOR_SIZE,
 
   defaultAvatar: process.env.DEFAULT_AVATAR || 'http://res.cloudinary.com/thehao/image/upload/v1742720328/img/zu8ppzlb07gwtweuwpfq.jpg',
+
+  // Swagger
+  swaggerUser: process.env.SWAGGER_USER,
+  swaggerPassword: process.env.SWAGGER_PASSWORD,
 }
