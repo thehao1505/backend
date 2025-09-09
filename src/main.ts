@@ -26,7 +26,6 @@ async function bootstrap() {
   app.useGlobalPipes(new ValidationPipe())
 
   const publicIP = await getPublicIP()
-  // const publicIP = '123'
 
   app.use(
     ['/docs'],
