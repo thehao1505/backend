@@ -1,4 +1,3 @@
-// src/processors/embedding.processor.ts
 import { Processor, WorkerHost } from '@nestjs/bullmq'
 import { Injectable, Logger } from '@nestjs/common'
 import { Job } from 'bullmq'
@@ -101,7 +100,7 @@ export class EmbeddingProcessor extends WorkerHost {
 
   private async embedPost(post: Post) {
     try {
-      const imagesDescription = post.images.map(image => this.embeddingService.generateImageAnalysis(image))
+      const imagesDescription = await Promise.all(post.images.map(image => this.embeddingService.generateImageAnalysis(image)))
 
       const contentToEmbed = `${post.content} ${imagesDescription.join(' ')}`
 

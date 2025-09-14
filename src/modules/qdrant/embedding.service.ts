@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common'
-import { GoogleGenerativeAI } from '@google/generative-ai'
 import { configs } from '@utils/configs'
+import { GoogleGenerativeAI } from '@google/generative-ai'
 
 @Injectable()
 export class EmbeddingService {
@@ -13,7 +13,9 @@ export class EmbeddingService {
   }
 
   async generateEmbedding(text: string): Promise<number[]> {
-    const embeddingModel = this.genAI.getGenerativeModel({ model: 'embedding-001' })
+    const embeddingModel = this.genAI.getGenerativeModel({
+      model: 'text-embedding-004',
+    })
     try {
       const result = await embeddingModel.embedContent(text)
       return result.embedding.values

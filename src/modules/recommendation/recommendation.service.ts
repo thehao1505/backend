@@ -55,7 +55,8 @@ export class RecommendationService {
       'process-post-embedding',
       { postId },
       {
-        attempts: 3,
+        // Temporarily set attempts to 1 to avoid calling ai api too many times
+        attempts: 1,
         backoff: {
           type: 'exponential',
           delay: 1000,
