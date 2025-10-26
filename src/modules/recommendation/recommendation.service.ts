@@ -1,7 +1,7 @@
 import { QueryRecommendationDto, QuerySearchDto } from '@dtos/recommendation.dto'
 import { User } from '@entities/index'
 import { Post } from '@entities/post.entity'
-import { EmbeddingService, QdrantService, RedisService } from '@modules/index-service'
+import { EmbeddingService, PostService, QdrantService, RedisService } from '@modules/index-service'
 import { InjectQueue } from '@nestjs/bullmq'
 import { BadRequestException, Injectable, Logger } from '@nestjs/common'
 import { InjectModel } from '@nestjs/mongoose'
@@ -13,7 +13,7 @@ import { Model } from 'mongoose'
 @Injectable()
 export class RecommendationService {
   private readonly logger = new Logger(RecommendationService.name)
-  private readonly CACHE_TTL = 60 * 30 // 30 minutes
+  private readonly CACHE_TTL = 60 * 30
   private readonly METRICS_PREFIX = 'recommendation:metrics:'
 
   constructor(
@@ -23,6 +23,7 @@ export class RecommendationService {
     private readonly qdrantService: QdrantService,
     private readonly embeddingService: EmbeddingService,
     private readonly redisService: RedisService,
+    private readonly postService: PostService,
   ) {}
 
   private async trackMetric(metricName: string, value: number = 1) {
@@ -68,7 +69,7 @@ export class RecommendationService {
 
   // Get content-based recommendations for a new user
   // Uses a random selection of popular posts as the baseline
-  async getRecommendationsForNewUser(userId: string, query: QueryRecommendationDto) {
+  async getRecommendationsForNewUser(query: QueryRecommendationDto) {
     const { page, limit } = query
     const skip = (page - 1) * limit
     const total = await this.postModel.countDocuments({ isHidden: false, isDeleted: false })
@@ -227,7 +228,7 @@ export class RecommendationService {
       const postLiked = await this.postModel.countDocuments({ likes: user._id })
 
       if (postLiked === 0 && !user.followings) {
-        const newUserRecommendations = await this.getRecommendationsForNewUser(userId, query)
+        const newUserRecommendations = await this.getRecommendationsForNewUser(query)
         await this.trackRecommendationMetrics(userId, newUserRecommendations.items, 'new_user')
         return newUserRecommendations
       }
@@ -324,7 +325,7 @@ export class RecommendationService {
       this.logger.error(`Error getting recommendations: ${error.message}`)
       await this.trackMetric('errors')
       // Fallback to new user recommendations if there's an error
-      const fallbackRecommendations = await this.getRecommendationsForNewUser(userId, query)
+      const fallbackRecommendations = await this.getRecommendationsForNewUser(query)
       await this.trackRecommendationMetrics(userId, fallbackRecommendations.items, 'fallback')
       return fallbackRecommendations
     }
@@ -375,9 +376,12 @@ export class RecommendationService {
     return recommendations
   }
 
-  async search(query: QuerySearchDto) {
+  async search(query: QuerySearchDto, userId: string) {
     const { page, limit } = query
     const { text } = query
+    if (text) {
+      await this.postService.searchActivity(text, userId)
+    }
 
     const embedding = await this.embeddingService.generateEmbedding(text)
     const similar = await this.qdrantService.searchSimilar(configs.postCollectionName, embedding, Number(limit), Number(page), {})

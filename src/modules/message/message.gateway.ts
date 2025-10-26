@@ -31,7 +31,7 @@ export class MessageGateway implements OnGatewayConnection, OnGatewayDisconnect 
   ) {}
 
   afterInit(server: Server) {
-    Logger.log('✅ WebSocket server has been initialized on port 8080')
+    Logger.log('✅ WebSocket server has been initialized')
   }
 
   // are Lifecycles Hooks provided by Nestjs for Websocket Gateway.

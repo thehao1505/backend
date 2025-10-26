@@ -3,7 +3,7 @@ import { forwardRef, Module } from '@nestjs/common'
 import { RecommendationController } from './recommendation.controller'
 import { User, UserSchema, Post, PostSchema } from '@entities/index'
 import { MongooseModule } from '@nestjs/mongoose'
-import { QdrantModule, RedisModule } from '@modules/index'
+import { PostModule, QdrantModule, RedisModule } from '@modules/index'
 
 @Module({
   imports: [
@@ -13,6 +13,7 @@ import { QdrantModule, RedisModule } from '@modules/index'
     ]),
     forwardRef(() => QdrantModule),
     forwardRef(() => RedisModule),
+    forwardRef(() => PostModule),
   ],
   providers: [RecommendationService],
   exports: [RecommendationService],

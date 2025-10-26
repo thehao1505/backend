@@ -40,6 +40,16 @@ export class PostController {
     return this.postService.updatePost(id, updatePostDto)
   }
 
+  @Delete(':id/soft-delete')
+  async softDeletePost(@Param('id') id: string) {
+    return await this.postService.softDeletePost(id)
+  }
+
+  @Delete(':id/hidden')
+  async hiddenPost(@Param('id') id: string, @Req() req: Request) {
+    return await this.postService.hiddenPost(req.user['_id'], id)
+  }
+
   @Post(':id/like')
   async likePost(@Param('id') id: string, @Req() req: Request) {
     return await this.postService.likePost(id, req.user['_id'])
@@ -50,13 +60,18 @@ export class PostController {
     return await this.postService.unLikePost(id, req.user['_id'])
   }
 
-  @Delete(':id/soft-delete')
-  async softDeletePost(@Param('id') id: string) {
-    return await this.postService.softDeletePost(id)
+  @Post(':id/share')
+  async sharePost(@Param('id') id: string, @Req() req: Request) {
+    return await this.postService.sharePost(id, req.user['_id'])
   }
 
-  @Delete(':id/hidden')
-  async hiddenPost(@Param('id') id: string, @Req() req: Request) {
-    return await this.postService.hiddenPost(req.user['_id'], id)
+  @Post(':id/view')
+  async viewPost(@Param('id') id: string, @Req() req: Request, @Body() dwellTime: number) {
+    return await this.postService.viewPost(id, req.user['_id'], dwellTime)
+  }
+
+  @Post(':id/click')
+  async clickPost(@Param('id') id: string, @Req() req: Request) {
+    return await this.postService.clickPost(id, req.user['_id'])
   }
 }

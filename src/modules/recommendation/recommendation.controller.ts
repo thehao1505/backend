@@ -38,7 +38,7 @@ export class RecommendationController {
 
   @Get('search')
   @ApiOperation({ summary: 'Get recommendation system metrics' })
-  async search(@Query() query: QuerySearchDto) {
-    return this.recommendationService.search(query)
+  async search(@Req() req: Request, @Query() query: QuerySearchDto) {
+    return this.recommendationService.search(query, req.user['_id'])
   }
 }
