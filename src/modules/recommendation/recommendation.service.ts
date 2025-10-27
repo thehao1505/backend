@@ -403,12 +403,13 @@ export class RecommendationService {
 
   @Cron(CronExpression.EVERY_10_MINUTES)
   async handleEnqueuePostForEmbedding() {
-    const posts = await this.postModel
-      .find({ isEmbedded: { $ne: true } })
-      .limit(100)
-      .lean()
-    for (const post of posts) {
-      await this.enqueuePostForEmbedding(post._id.toString())
-    }
+    return
+    // const posts = await this.postModel
+    //   .find({ isEmbedded: { $ne: true } })
+    //   .limit(100)
+    //   .lean()
+    // for (const post of posts) {
+    //   await this.enqueuePostForEmbedding(post._id.toString())
+    // }
   }
 }
