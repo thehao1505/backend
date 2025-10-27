@@ -24,13 +24,14 @@ export class UserService {
 
   @Cron(CronExpression.EVERY_10_MINUTES)
   async handleEnqueueUserForEmbedding() {
-    const users = await this.userModel
-      .find({ isEmbedded: { $ne: true } })
-      .limit(100)
-      .lean()
-    for (const user of users) {
-      await this.enqueueUserForEmbedding(user._id.toString())
-    }
+    return
+    // const users = await this.userModel
+    //   .find({ isEmbedded: { $ne: true } })
+    //   .limit(100)
+    //   .lean()
+    // for (const user of users) {
+    //   await this.enqueueUserForEmbedding(user._id.toString())
+    // }
   }
 
   async getMe(userId: string) {
