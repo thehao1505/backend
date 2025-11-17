@@ -158,13 +158,12 @@ export class RecommendationService {
 
   async search(userId: string, query: QuerySearchDto) {
     const { page, limit, text } = query
-    if (text) {
-      // Ghi lại hoạt động tìm kiếm (để processor cập nhật vector sở thích)
-      await this.postService.searchActivity(text, userId)
-    }
-
     const embedding = await this.embeddingService.generateEmbedding(text)
-    const similar = await this.qdrantService.searchSimilar(configs.postCollectionName, embedding, Number(limit), Number(page - 1), {})
+
+    if (text) {
+      await this.postService.searchActivity(text, userId, embedding)
+    }
+    const similar = await this.qdrantService.searchSimilar(configs.postCollectionName, embedding, Number(limit), Number(page), {})
 
     const similarPostIds = similar.map(item => item.id)
     const similarPostsRaw = await this.postModel

@@ -7,6 +7,8 @@ export enum UserActivityType {
   SEARCH = 'SEARCH',
   POST_VIEW = 'POST_VIEW',
   POST_CLICK = 'POST_CLICK',
+  UNLIKE = 'UNLIKE',
+  REPLY_POST = 'REPLY_POST',
 }
 
 @Schema({

@@ -99,7 +99,12 @@ export class PostService {
       } as NotificationPayload
 
       await this.notificationQueue.add('send-notification', payload)
-      this.userService.enqueueUserPersonaForEmbedding(author, parentPost._id, InteractionType.POST_REPLY)
+      const activity = await this.userActivityModel.create({
+        userId: author,
+        postId: createPostDto.parentId,
+        userActivityType: UserActivityType.REPLY_POST,
+      })
+      this.userService.enqueueUserPersonaForEmbedding(activity._id)
 
       return post.populate('author', 'username avatar')
     } else {
@@ -178,23 +183,21 @@ export class PostService {
       throw new BadRequestException('User already liked this post')
     }
 
-    await Promise.all([
-      this.userActivityModel.updateOne(
-        {
-          postId,
-          userId,
-          userActivityType: UserActivityType.LIKE,
+    const activity = await this.userActivityModel.findOneAndUpdate(
+      {
+        postId,
+        userId,
+        userActivityType: UserActivityType.LIKE,
+      },
+      {
+        $set: {
+          isDeleted: false,
         },
-        {
-          $set: {
-            isDeleted: false,
-          },
-        },
-        { upsert: true },
-      ),
-      this.postModel.updateOne({ _id: postId }, { $inc: { likeCount: 1 } }),
-    ])
-    this.userService.enqueueUserPersonaForEmbedding(userId, postId, InteractionType.LIKE)
+      },
+      { upsert: true, new: true },
+    )
+    await this.postModel.updateOne({ _id: postId }, { $inc: { likeCount: 1 } })
+    this.userService.enqueueUserPersonaForEmbedding(activity._id.toString())
     this.notificationService.createNotification({
       type: NotificationType.LIKE,
       recipientId: post.author,
@@ -220,11 +223,16 @@ export class PostService {
         throw new BadRequestException('User has not liked this post')
       }
 
-      await Promise.all([
-        this.userActivityModel.updateOne({ _id: activeLike._id }, { $set: { isDeleted: true } }),
-        this.postModel.updateOne({ _id: postId }, { $inc: { likeCount: -1 } }),
-        this.userService.enqueueUserPersonaForEmbedding(userId, postId, InteractionType.UNLIKE),
-      ])
+      await this.userActivityModel.updateOne({ _id: activeLike._id }, { $set: { isDeleted: true } })
+      await this.postModel.updateOne({ _id: postId }, { $inc: { likeCount: -1 } })
+
+      const unlikeActivity = await this.userActivityModel.create({
+        userId,
+        postId,
+        userActivityType: UserActivityType.UNLIKE,
+      })
+
+      this.userService.enqueueUserPersonaForEmbedding(unlikeActivity._id.toString())
 
       return 'Unliked this post successfully!'
     } catch (error) {
@@ -237,15 +245,13 @@ export class PostService {
       const [post, user] = await Promise.all([this.postModel.findById(postId), this.userService.getUser(userId)])
       if (!post || !user) throw new NotFoundException('Post or user not found')
 
-      await Promise.all([
-        this.userActivityModel.create({
-          postId,
-          userId,
-          userActivityType: UserActivityType.SHARE,
-        }),
-        this.postModel.updateOne({ _id: postId }, { $inc: { shareCount: 1 } }),
-        this.userService.enqueueUserPersonaForEmbedding(userId, postId, InteractionType.SHARE),
-      ])
+      const share = await this.userActivityModel.create({
+        postId,
+        userId,
+        userActivityType: UserActivityType.SHARE,
+      })
+      await this.postModel.updateOne({ _id: postId }, { $inc: { shareCount: 1 } })
+      this.userService.enqueueUserPersonaForEmbedding(share._id)
 
       return 'Share this post successfully!'
     } catch (error) {
@@ -260,18 +266,16 @@ export class PostService {
       const [post, user] = await Promise.all([this.postModel.findById(postId), this.userService.getUser(userId)])
       if (!post || !user) throw new NotFoundException('Post or user not found')
 
-      await Promise.all([
-        this.userActivityModel.create({
-          postId,
-          userId,
-          userActivityType: UserActivityType.POST_VIEW,
-          dwellTime,
-        }),
-        this.postModel.updateOne({ _id: postId }, { $inc: { viewCount: 1 } }),
-      ])
+      const view = await this.userActivityModel.create({
+        postId,
+        userId,
+        userActivityType: UserActivityType.POST_VIEW,
+        dwellTime,
+      })
+      await this.postModel.updateOne({ _id: postId }, { $inc: { viewCount: 1 } })
 
       if (dwellTime > post.dwellTimeThreshold) {
-        await this.userService.enqueueUserPersonaForEmbedding(userId, postId, InteractionType.POST_VIEW)
+        this.userService.enqueueUserPersonaForEmbedding(view._id)
       }
 
       return 'Record view this post successfully!'
@@ -285,15 +289,13 @@ export class PostService {
       const [post, user] = await Promise.all([this.postModel.findById(postId), this.userService.getUser(userId)])
       if (!post || !user) throw new NotFoundException('Post or user not found')
 
-      await Promise.all([
-        this.userActivityModel.create({
-          postId,
-          userId,
-          userActivityType: UserActivityType.POST_CLICK,
-        }),
-        this.postModel.updateOne({ _id: postId }, { $inc: { clickCount: 1 } }),
-        this.userService.enqueueUserPersonaForEmbedding(userId, postId, InteractionType.POST_CLICK),
-      ])
+      const click = await this.userActivityModel.create({
+        postId,
+        userId,
+        userActivityType: UserActivityType.POST_CLICK,
+      })
+      await this.postModel.updateOne({ _id: postId }, { $inc: { clickCount: 1 } })
+      this.userService.enqueueUserPersonaForEmbedding(click._id)
 
       return 'Record click this post successfully!'
     } catch (error) {
@@ -301,12 +303,13 @@ export class PostService {
     }
   }
 
-  async searchActivity(searchText: string, userId: string) {
+  async searchActivity(searchText: string, userId: string, vector: number[]) {
     try {
       const user = await this.userService.getUser(userId)
       if (!user) throw new NotFoundException('User not found')
 
-      return await this.userActivityModel.create({ userId, userActivityType: UserActivityType.SEARCH, searchText })
+      const search = await this.userActivityModel.create({ userId, userActivityType: UserActivityType.SEARCH, searchText })
+      this.userService.enqueueUserPersonaForEmbedding(search._id, vector)
     } catch (error) {
       throw new BadRequestException('Fail to record this activity (search)')
     }

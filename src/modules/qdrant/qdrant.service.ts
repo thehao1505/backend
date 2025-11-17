@@ -51,7 +51,7 @@ export class QdrantService implements OnModuleInit {
       //   return
       // }
 
-      const VECTOR_DIMENSIONS = 768 // <-- Nhớ chỉnh số này
+      const VECTOR_DIMENSIONS = 768
 
       await this.client.createCollection(collectionName, {
         vectors: {
@@ -174,5 +174,4 @@ export class QdrantService implements OnModuleInit {
       throw error
     }
   }
-  // --- KẾT THÚC HÀM MỚI ---
 }

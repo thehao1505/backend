@@ -12,7 +12,7 @@ const INTERACTION_WEIGHTS: { [key: string]: number } = {
   LIKE: 0.15,
   SHARE: 0.35,
   UNLIKE: -0.15,
-  SEARCH: 0.2,
+  SEARCH: 0.1,
   POST_VIEW: 0.15,
   POST_CLICK: 0.25,
   REPLY_POST: 0.4,
@@ -93,34 +93,56 @@ export class EmbeddingProcessor extends WorkerHost {
     }
 
     if (job.name === 'process-persona-user-embedding') {
-      const { userId, postId, interactionType } = job.data
-      this.logger.log(`Processing embedding persona for user: ${userId}`)
+      const { activityId, vector } = job.data
+      this.logger.log(`Processing embedding persona for activityId: ${activityId}`)
 
-      await this.updateUserEmbeddingFromInteraction(userId, postId, interactionType)
-      return { success: true, userId, postId }
+      await this.updateUserEmbeddingFromActivity(activityId, vector)
+      return { success: true, activityId }
     }
   }
 
-  private async updateUserEmbeddingFromInteraction(userId: string, postId: string, interactionType: string) {
-    this.logger.log(`Updating dynamic embedding for user ${userId} from post ${postId} (Action: ${interactionType})`)
+  private async updateUserEmbeddingFromActivity(activityId: string, vector?: number[]) {
+    this.logger.debug(vector[0], vector.length)
+    const activity = await this.userActivityModel.findById(activityId)
 
-    const newSignalWeight = INTERACTION_WEIGHTS[interactionType] || INTERACTION_WEIGHTS['default']
-
-    const postVector = await this.getVector(configs.postCollectionName, postId)
-    if (!postVector) {
-      throw new Error(`Không tìm thấy vector cho post ${postId} để cập nhật user ${userId}`)
+    if (!activity) {
+      throw new Error(`UserActivity not found: ${activityId}`)
     }
 
-    const currentUserVector = await this.getVector(configs.userCollectionName, userId)
-    const newUserVector = this.calculateNewUserVector(currentUserVector, postVector, newSignalWeight)
+    if (activity.isEmbedded) {
+      this.logger.warn(`Activity ${activityId} has already been processed. Skipping.`)
+      return
+    }
 
-    const contentToEmbed = `Được cập nhật động từ ${interactionType} post ${postId} (weight: ${newSignalWeight})`
-    await this.upsertUserVector(userId, newUserVector, contentToEmbed)
+    const { userId, postId, userActivityType } = activity
 
-    await this.userActivityModel.findOneAndUpdate(
-      { userId, postId, userActivityType: UserActivityType[interactionType] },
-      { $set: { isEmbedded: true, lastEmbeddedAt: new Date() } },
-    )
+    let newSignalVector: number[] | null = null
+    const newSignalWeight = INTERACTION_WEIGHTS[userActivityType] || INTERACTION_WEIGHTS['DEFAULT']
+
+    if (userActivityType === UserActivityType.SEARCH) {
+      newSignalVector = vector
+    } else if (postId) {
+      newSignalVector = await this.getVector(configs.postCollectionName, postId.toString())
+    } else {
+      throw new Error(`Activity ${activityId} (Type: ${userActivityType}) has no postId or searchText to process.`)
+    }
+
+    if (!newSignalVector) {
+      throw new Error(`Could not get signal vector for activity ${activityId}`)
+    }
+
+    const currentUserVector = await this.getVector(configs.userCollectionName, userId.toString())
+
+    const newUserVector = this.calculateNewUserVector(currentUserVector, newSignalVector, newSignalWeight)
+
+    const contentToEmbed = `Được cập nhật động từ ${userActivityType} (Weight: ${newSignalWeight}) via activity ${activityId}`
+    await this.upsertUserVector(userId.toString(), newUserVector, contentToEmbed)
+
+    activity.isEmbedded = true
+    activity.lastEmbeddedAt = new Date()
+    await activity.save()
+
+    this.logger.log(`Successfully updated user persona from activity: ${activityId}`)
   }
 
   private calculateNewUserVector(oldVector: number[] | null, newSignalVector: number[], newSignalWeight: number): number[] {

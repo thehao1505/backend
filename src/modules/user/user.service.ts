@@ -231,10 +231,10 @@ export class UserService {
     this.logger.log(`Enqueued user ${userId} for embedding`)
   }
 
-  async enqueueUserPersonaForEmbedding(userId: string, postId: string, interactionType: InteractionType) {
+  async enqueueUserPersonaForEmbedding(activityId: string, vector?: number[]) {
     await this.embeddingQueue.add(
       'process-persona-user-embedding',
-      { userId, postId, interactionType },
+      { activityId, vector },
       {
         attempts: 3,
         backoff: {
@@ -243,7 +243,7 @@ export class UserService {
         },
       },
     )
-    this.logger.log(`Enqueued user ${userId} for embedding`)
+    this.logger.log(`Enqueued activity ${activityId} for embedding`)
   }
 
   @Cron(CronExpression.EVERY_DAY_AT_MIDNIGHT)

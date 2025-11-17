@@ -39,7 +39,7 @@ export class RecommendationController {
 
   @Get('search')
   async semanticSearch(@Req() req: Request, @Query() query: QuerySearchDto) {
-    return this.recommendationService.getFollowingRecommendations(req.user['_id'], query)
+    return this.recommendationService.search(req.user['_id'], query)
   }
 
   @Get(':id/similar-posts')
