@@ -18,9 +18,6 @@ export class Post extends BaseEntity {
   @Prop({ type: String, ref: 'User' })
   author: string
 
-  @Prop({ type: [String], ref: 'User', default: [] })
-  likes: string[]
-
   @Prop({ type: Boolean, default: false })
   isHidden: boolean
 
@@ -38,6 +35,21 @@ export class Post extends BaseEntity {
 
   @Prop({ type: Boolean, default: false })
   isReply: boolean
+
+  @Prop({ type: Number, default: 0 })
+  dwellTimeThreshold: number
+
+  @Prop({ type: Number, default: 0 })
+  likeCount: number
+
+  @Prop({ type: Number, default: 0 })
+  viewCount: number
+
+  @Prop({ type: Number, default: 0 })
+  shareCount: number
+
+  @Prop({ type: Number, default: 0 })
+  clickCount: number
 }
 export const PostSchema = SchemaFactory.createForClass(Post)
 export type PostDocument = Post & Document

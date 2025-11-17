@@ -15,6 +15,80 @@ export class QdrantService implements OnModuleInit {
     await this.initializeCollection()
   }
 
+  // async createCollection(collectionName: string) {
+  //   try {
+  //     this.logger.log(`Đang kiểm tra và tạo collection: ${collectionName}`)
+
+  //     const exists = await this.client.collectionExists(collectionName)
+  //     if (exists) {
+  //       this.logger.log(`Collection ${collectionName} đã tồn tại. Bỏ qua.`)
+  //       return
+  //     }
+
+  //     const VECTOR_DIMENSIONS = 768
+
+  //     await this.client.createCollection(collectionName, {
+  //       vectors: {
+  //         size: VECTOR_DIMENSIONS,
+  //         distance: 'Cosine',
+  //       },
+  //     })
+  //     this.logger.log(`Đã tạo collection ${collectionName} thành công.`)
+  //   } catch (error) {
+  //     this.logger.error(`Không thể tạo collection ${collectionName}: ${error.message}`)
+  //     throw error
+  //   }
+  // }
+
+  async createCollection(collectionName: string) {
+    try {
+      this.logger.log(`Đang tạo collection: ${collectionName}`)
+
+      // [XÓA BỎ]
+      // const exists = await this.client.collectionExists(collectionName)
+      // if (exists) {
+      //   this.logger.log(`Collection ${collectionName} đã tồn tại. Bỏ qua.`)
+      //   return
+      // }
+
+      const VECTOR_DIMENSIONS = 768 // <-- Nhớ chỉnh số này
+
+      await this.client.createCollection(collectionName, {
+        vectors: {
+          size: VECTOR_DIMENSIONS,
+          distance: 'Cosine',
+        },
+      })
+      this.logger.log(`Đã tạo collection ${collectionName} thành công.`)
+    } catch (error) {
+      // Bắt lỗi nếu collection đã tồn tại
+      if (error.message && error.message.includes('AlreadyExists')) {
+        this.logger.warn(`Collection ${collectionName} đã tồn tại. Bỏ qua.`)
+        return
+      }
+      this.logger.error(`Không thể tạo collection ${collectionName}: ${error.message}`)
+      throw error
+    }
+  }
+
+  async deleteCollection(collectionName: string) {
+    try {
+      this.logger.log(`Đang xóa collection: ${collectionName}`)
+
+      const exists = await this.client.collectionExists(collectionName)
+      if (!exists) {
+        this.logger.log(`Collection ${collectionName} không tồn tại. Bỏ qua.`)
+        return
+      }
+
+      await this.client.deleteCollection(collectionName)
+      this.logger.log(`Đã xóa collection ${collectionName} thành công.`)
+    } catch (error) {
+      this.logger.error(`Không thể xóa collection ${collectionName}: ${error.message}`)
+      throw error
+    }
+  }
+
   private async initializeCollection() {
     try {
       const collections = await this.client.getCollections()
@@ -70,6 +144,8 @@ export class QdrantService implements OnModuleInit {
       limit,
       offset,
       filter,
+      with_payload: true,
+      with_vector: false,
     })
   }
 
@@ -78,4 +154,25 @@ export class QdrantService implements OnModuleInit {
       points: [id],
     })
   }
+
+  async getVectorById(collectionName: string, id: string) {
+    this.logger.log(`Retrieving vector for id ${id} from ${collectionName}`)
+    try {
+      const results = await this.client.retrieve(collectionName, {
+        ids: [id],
+        with_vector: true,
+        with_payload: true,
+      })
+
+      if (!results || results.length === 0) {
+        throw new Error(`Point with id ${id} not found in ${collectionName}`)
+      }
+
+      return results[0]
+    } catch (error) {
+      this.logger.error(`Error retrieving vector ${id} from ${collectionName}: ${error.message}`)
+      throw error
+    }
+  }
+  // --- KẾT THÚC HÀM MỚI ---
 }

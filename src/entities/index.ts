@@ -2,6 +2,7 @@ export * from './base.entity'
 export * from './message.entity'
 export * from './notification.entity'
 export * from './post.entity'
-export * from './post-view.entity'
 export * from './user.entity'
+export * from './user-follow.entity'
 export * from './user-activity.entity'
+export * from './recommendation-log.entity' // <-- THÊM DÒNG NÀY

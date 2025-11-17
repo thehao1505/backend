@@ -42,4 +42,8 @@ export const configs = {
   // Swagger
   swaggerUser: process.env.SWAGGER_USER,
   swaggerPassword: process.env.SWAGGER_PASSWORD,
+
+  // Cronjob
+  isSkipCron: process.env.ISSKIPCRON,
+  isSkipInterceptor: process.env.ISSKIPINTERCEPTOR,
 }

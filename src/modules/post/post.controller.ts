@@ -1,7 +1,7 @@
 import { Body, Controller, Post, Param, Get, Patch, Query, UseGuards, Req, UseInterceptors, Delete } from '@nestjs/common'
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger'
 import { PostService } from '@modules/index-service'
-import { CreatePostDto, QueryDto, UpdatePostDto } from '@dtos/post.dto'
+import { CreatePostDto, PostViewDwellTimeDto, QueryDto, UpdatePostDto } from '@dtos/post.dto'
 import { Request } from 'express'
 import { AuthGuard } from '@nestjs/passport'
 import { PostEmbeddingInterceptor } from 'src/interceptors/post-embedding.interceptor'
@@ -45,7 +45,7 @@ export class PostController {
     return await this.postService.softDeletePost(id)
   }
 
-  @Delete(':id/hidden')
+  @Patch(':id/hidden')
   async hiddenPost(@Param('id') id: string, @Req() req: Request) {
     return await this.postService.hiddenPost(req.user['_id'], id)
   }
@@ -66,8 +66,8 @@ export class PostController {
   }
 
   @Post(':id/view')
-  async viewPost(@Param('id') id: string, @Req() req: Request, @Body() dwellTime: number) {
-    return await this.postService.viewPost(id, req.user['_id'], dwellTime)
+  async viewPost(@Param('id') id: string, @Req() req: Request, @Body() postViewDwellTimeDto: PostViewDwellTimeDto) {
+    return await this.postService.viewPost(id, req.user['_id'], postViewDwellTimeDto)
   }
 
   @Post(':id/click')

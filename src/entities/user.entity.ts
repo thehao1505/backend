@@ -47,12 +47,6 @@ export class User extends BaseEntity {
   @Prop({ type: Date, default: null })
   passwordResetExpires: Date
 
-  @Prop({ type: [String], ref: 'User', default: [] })
-  followings: string[]
-
-  @Prop({ type: [String], ref: 'User', default: [] })
-  followers: string[]
-
   @Prop({ type: Boolean, default: true })
   isPublic: boolean
 
@@ -64,6 +58,15 @@ export class User extends BaseEntity {
 
   @Prop({ type: Date, default: null })
   lastEmbeddedAt: Date
+
+  @Prop({ type: Number, default: 0 })
+  followerCount: number
+
+  @Prop({ type: Number, default: 0 })
+  followingCount: number
+
+  @Prop({ type: [String], default: [] })
+  persona: string[]
 }
 export const UserSchema = SchemaFactory.createForClass(User)
 export type UserDocument = User & Document

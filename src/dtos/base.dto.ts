@@ -12,7 +12,7 @@ export class Pagination {
   @Type(() => Number)
   @Min(1)
   @IsInt()
-  page?: number
+  page?: number = 1
 
   @ApiPropertyOptional({
     example: 1,
@@ -25,7 +25,7 @@ export class Pagination {
   limit?: number = 10
 
   @ApiPropertyOptional({
-    example: { "key": "Value" },
+    example: { key: 'Value' },
     description: 'A valid JSON string',
   })
   @IsOptional()

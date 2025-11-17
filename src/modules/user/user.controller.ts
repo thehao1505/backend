@@ -13,6 +13,16 @@ import { UserEmbeddingInterceptor } from 'src/interceptors/user-embedding.interc
 export class UserController {
   constructor(private readonly userService: UserService) {}
 
+  @Get('process-profile-user-embedding/:userId')
+  async embedProfileUser(@Param('userId') userId: string) {
+    return this.userService.enqueueUserForEmbedding(userId)
+  }
+
+  @Get('process-persona-user-embedding/:userId')
+  async embedPersonaUser(@Param('userId') userId: string) {
+    return this.userService.enqueueUserForEmbedding(userId)
+  }
+
   @Get('me')
   me(@Req() req: Request) {
     return this.userService.getMe(req.user['_id'])
@@ -51,7 +61,7 @@ export class UserController {
 
   @Post('unfollow/:followingId')
   async unFollowUser(@Req() req: Request, @Param('followingId') followingId: string) {
-    return await this.userService.unFollowUser(req.user['_id'], followingId)
+    return await this.userService.unfollowUser(req.user['_id'], followingId)
   }
 
   @Post('remove-follower/:followerId')
@@ -67,5 +77,10 @@ export class UserController {
   @Get('search/users')
   async searchUsers(@Query() query: QuerySearchDto) {
     return await this.userService.searchUsers(query)
+  }
+
+  @Get('sync/qdrant')
+  async a() {
+    return this.userService.handleEnqueueUserForEmbedding()
   }
 }

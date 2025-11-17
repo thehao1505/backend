@@ -56,7 +56,7 @@ export class AuthService {
   async signJwtToken(id: string, email: string): Promise<{ accessToken: string }> {
     const payload = { _id: id, email }
     const jwtString = await this.jwtService.signAsync(payload, {
-      expiresIn: '1d',
+      // expiresIn: '30d',
       secret: configs.jwtSecret,
     })
 

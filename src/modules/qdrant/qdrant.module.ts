@@ -3,7 +3,7 @@ import { QdrantService } from './qdrant.service'
 import { EmbeddingService } from './embedding.service'
 import { EmbeddingProcessor } from './embedding.processor'
 import { MongooseModule } from '@nestjs/mongoose'
-import { Post, PostSchema, User, UserSchema } from '@entities/index'
+import { Post, PostSchema, User, UserActivity, UserActivitySchema, UserSchema } from '@entities/index'
 import { RedisModule } from '@modules/redis/redis.module'
 import { QdrantController } from './qdrant.controller'
 
@@ -12,6 +12,7 @@ import { QdrantController } from './qdrant.controller'
     forwardRef(() => RedisModule),
     MongooseModule.forFeature([{ name: Post.name, schema: PostSchema }]),
     MongooseModule.forFeature([{ name: User.name, schema: UserSchema }]),
+    MongooseModule.forFeature([{ name: UserActivity.name, schema: UserActivitySchema }]),
   ],
   providers: [QdrantService, EmbeddingService, EmbeddingProcessor],
   controllers: [QdrantController],

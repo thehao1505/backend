@@ -23,13 +23,19 @@ export class UserActivity extends BaseEntity {
   userActivityType: UserActivityType
 
   @Prop({ type: Number })
-  dwellTime: Number
+  dwellTime: number
 
   @Prop({ type: String })
-  searchText: String
+  searchText: string
 
   @Prop({ ref: 'Post', type: String })
   postId: string
+
+  @Prop({ type: Boolean, default: false })
+  isEmbedded: boolean
+
+  @Prop({ type: Date, default: null })
+  lastEmbeddedAt: Date
 }
 export const UserActivitySchema = SchemaFactory.createForClass(UserActivity)
 export type UserActivityDocument = UserActivity & Document

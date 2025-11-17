@@ -4,6 +4,7 @@ import { MongooseModule } from '@nestjs/mongoose'
 import { UserController } from './user.controller'
 import { UserService } from './user.service'
 import { NotificationModule, QdrantModule, RedisModule } from '@modules/index'
+import { UserFollow, UserFollowSchema } from '@entities/user-follow.entity'
 
 @Module({
   imports: [
@@ -11,6 +12,10 @@ import { NotificationModule, QdrantModule, RedisModule } from '@modules/index'
       {
         name: User.name,
         schema: UserSchema,
+      },
+      {
+        name: UserFollow.name,
+        schema: UserFollowSchema,
       },
     ]),
     forwardRef(() => RedisModule),

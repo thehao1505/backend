@@ -1,5 +1,5 @@
 import { ApiPropertyOptional, PartialType } from '@nestjs/swagger'
-import { IsArray, IsOptional, IsString } from 'class-validator'
+import { IsArray, IsNotEmpty, IsNumber, IsOptional, IsString } from 'class-validator'
 import { Pagination } from './base.dto'
 
 export class CreatePostDto {
@@ -41,4 +41,10 @@ export class QueryDto extends Pagination {
   @IsOptional()
   @IsString()
   parentId?: string
+}
+
+export class PostViewDwellTimeDto {
+  @IsNotEmpty()
+  @IsNumber()
+  dwellTime: number
 }
