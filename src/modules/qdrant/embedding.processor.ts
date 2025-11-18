@@ -120,7 +120,7 @@ export class EmbeddingProcessor extends WorkerHost {
     const newSignalWeight = INTERACTION_WEIGHTS[userActivityType] || INTERACTION_WEIGHTS['DEFAULT']
 
     if (userActivityType === UserActivityType.SEARCH) {
-      newSignalVector = vector
+      newSignalVector = vector ? vector : await this.embeddingService.generateEmbedding(activity.searchText)
     } else if (postId) {
       newSignalVector = await this.getVector(configs.postCollectionName, postId.toString())
     } else {

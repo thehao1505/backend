@@ -185,17 +185,15 @@ export class RecommendationService {
       const cached = await this._getCachedRecommendations(cacheKey)
       if (cached) return cached
 
-      const [cbfPool, cfPool] = await Promise.all([
-        this._getCBFCandidates(userId, this.HYBRID_POOL_LIMIT),
-        this._getCFCandidatesAsPost(userId, this.HYBRID_POOL_LIMIT),
-      ])
+      const cbfPool = await this._getCBFCandidates(userId, this.HYBRID_POOL_LIMIT)
+      const cfPool = await this._getCFCandidatesAsPost(userId, this.HYBRID_POOL_LIMIT)
 
       if (cbfPool.length === 0 && cfPool.length === 0) {
         this.logger.log(`[Hybrid] Cold-start cho user ${userId}, fallback to popular post`)
         return this._getFallbackPopularPosts(query)
       }
 
-      const mergedList = await this._interleaveList(cbfPool, cfPool)
+      const mergedList = this._interleaveList(cbfPool, cfPool)
 
       const diverseList = await this._getDiversePostsByAuthor(mergedList, mergedList.length)
 
@@ -331,8 +329,8 @@ export class RecommendationService {
       return []
     }
 
-    const interactedPostIds = await this.userActivityModel.distinct('postId', { userId })
-    const interactedPostIdsStr = interactedPostIds.map(id => id.toString())
+    const interactedPostIds = await this.userActivityModel.distinct('postId', { userId, postId: { $ne: null } })
+    const interactedPostIdsStr = interactedPostIds.map(id => id)
 
     const filter = {
       must_not: [
@@ -344,7 +342,7 @@ export class RecommendationService {
       ],
     }
 
-    const similar = await this.qdrantService.searchSimilar(configs.postCollectionName, userInterestVector, poolLimit, 0, filter)
+    const similar = await this.qdrantService.searchSimilar(configs.postCollectionName, userInterestVector, poolLimit, 1, filter)
     if (similar.length === 0) return []
 
     const similarPostIds = similar.map(item => item.id)

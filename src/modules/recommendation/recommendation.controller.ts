@@ -17,9 +17,9 @@ export class RecommendationController {
     return this.recommendationService.enqueuePostForEmbedding(postId)
   }
 
-  @Get('test')
-  async getFeed() {
-    return 1
+  @Get('hybrid')
+  async getFeed(@Req() req: Request, @Query() query: QueryRecommendationDto) {
+    return this.recommendationService.getHybridRecommendations(req.user['_id'], query)
   }
 
   @Get('cbf')

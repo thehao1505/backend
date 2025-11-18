@@ -8,10 +8,10 @@ from collections import defaultdict
 import datetime
 
 # --- 1. CẤU HÌNH ---
-N_USERS = 5000
-N_POSTS = 20000
-LATENT_DIMS = 32 # Số chiều "sở thích" (gu)
-DATA_PATH = './data_synthetic' # Thư mục để lưu CSV
+N_USERS = 1000
+N_POSTS = 5000
+LATENT_DIMS = 64 # Số chiều "sở thích" (gu)
+DATA_PATH = './data_synthetic.log' # Thư mục để lưu CSV
 
 # Cấu hình mô phỏng
 AVG_INTERACTIONS_PER_USER = 15 # Số tương tác "chất lượng cao" trung bình

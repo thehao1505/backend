@@ -12,10 +12,11 @@ import { Post, User, UserActivity, RecommendationLog, UserFollow, UserActivityTy
 import { QdrantService } from '@modules/index-service'
 import { configs } from '@utils/configs/config'
 
-const DATA_PATH = './data_synthetic'
+const DATA_PATH = './data_synthetic.log'
 const USERS_FILE = `${DATA_PATH}/users.csv`
 const POSTS_FILE = `${DATA_PATH}/posts.csv`
 const TRAIN_INTERACTIONS_FILE = `${DATA_PATH}/train_interactions.csv`
+const FOLLOWS_FILE = `${DATA_PATH}/follows.csv`
 
 async function bootstrap() {
   const app = await NestFactory.createApplicationContext(AppModule)
@@ -29,30 +30,9 @@ async function bootstrap() {
   const embeddingQueue = app.get<Queue>(getQueueToken('embedding'))
   const qdrantService = app.get<QdrantService>(QdrantService)
 
-  // async function clearDatabase() {
-  //   logger.log('--- [Bước 0] Bắt đầu dọn dẹp DB ---')
-  //   await userModel.deleteMany({})
-  //   await postModel.deleteMany({})
-  //   await userActivityModel.deleteMany({})
-  //   await recLogModel.deleteMany({})
-  //   await userFollowModel.deleteMany({})
-  //   await embeddingQueue.obliterate({ force: true })
-
-  //   try {
-  //     await qdrantService.deleteCollection(configs.userCollectionName)
-  //     await qdrantService.deleteCollection(configs.postCollectionName)
-  //   } catch (e) {
-  //     logger.warn(`Không thể xóa collection (có thể chưa tồn tại): ${e.message}`)
-  //   }
-  //   await qdrantService.createCollection(configs.userCollectionName)
-  //   await qdrantService.createCollection(configs.postCollectionName)
-  //   logger.log('--- [Bước 0] Dọn dẹp DB hoàn tất ---')
-  // }
-
   async function clearDatabase() {
     logger.log('--- [Bước 0] Bắt đầu dọn dẹp DB ---')
 
-    // [MỚI] Tạm dừng queue để worker (trong cùng process) không lấy job
     await embeddingQueue.pause()
     logger.log('Đã tạm dừng (pause) BullMQ queue.')
 
@@ -161,6 +141,25 @@ async function bootstrap() {
     logger.log(`--- [Bước 2] Đã enqueue ${postsToCreate.length} job 'process-post-embedding' ---`)
   }
 
+  async function seedFollows() {
+    logger.log('--- [Bước 2.5] Bắt đầu nuôi Follows ---')
+    const followsToCreate: UserFollow[] = []
+    const stream = fs.createReadStream(FOLLOWS_FILE).pipe(csv())
+
+    for await (const row of stream) {
+      followsToCreate.push({
+        _id: uuidv4(), // UserFollow dùng _id
+        followerId: row.followerId,
+        followingId: row.followingId,
+      } as UserFollow)
+    }
+
+    if (followsToCreate.length > 0) {
+      await userFollowModel.insertMany(followsToCreate)
+    }
+    logger.log(`--- [Bước 2.5] Đã tạo ${followsToCreate.length} quan hệ Follow ---`)
+  }
+
   /**
    * Bước 3: Nuôi dữ liệu Tương tác (Học)
    */
@@ -172,8 +171,9 @@ async function bootstrap() {
 
     for await (const row of stream) {
       total++
-      // 1. Lưu lại log hành vi
-      await userActivityModel.create({
+
+      // 1. Tạo UserActivity và LẤY LẠI đối tượng vừa tạo
+      const newActivity = await userActivityModel.create({
         _id: row.id || uuidv4(),
         userId: row.userId,
         postId: row.postId || null,
@@ -183,14 +183,11 @@ async function bootstrap() {
         createdAt: new Date(row.createdAt),
       })
 
-      if (row.type !== UserActivityType.SEARCH && row.postId) {
-        await embeddingQueue.add('process-persona-user-embedding', {
-          userId: row.userId,
-          postId: row.postId,
-          interactionType: row.type,
-        })
-        count++
-      }
+      // 2. Enqueue job với payload chính xác
+      await embeddingQueue.add('process-persona-user-embedding', {
+        activityId: newActivity._id.toString(), // Chỉ cần truyền ID
+      })
+      count++
     }
     logger.log(`--- [Bước 3] Đã tạo ${total} UserActivities.`)
     logger.log(`--- [Bước 3] Đã enqueue ${count} jobs 'process-persona-user-embedding' ---`)
@@ -200,6 +197,7 @@ async function bootstrap() {
     await clearDatabase()
     await seedUsers()
     await seedPosts()
+    await seedFollows()
     await seedInteractions()
 
     logger.log('✅ ✅ ✅ Hoàn tất việc nuôi dữ liệu (Ingestion)!')
