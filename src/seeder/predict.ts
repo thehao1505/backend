@@ -1,5 +1,5 @@
 import { NestFactory } from '@nestjs/core'
-import { AppModule } from './../../app.module' // Đường dẫn tới AppModule
+import { AppModule } from '../app.module' // Đường dẫn tới AppModule
 import { Model } from 'mongoose'
 import { getModelToken } from '@nestjs/mongoose'
 import { Logger } from '@nestjs/common'

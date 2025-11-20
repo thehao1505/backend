@@ -1,5 +1,5 @@
 import { NestFactory } from '@nestjs/core'
-import { AppModule } from './../../app.module'
+import { AppModule } from './../app.module'
 import * as fs from 'fs'
 import * as csv from 'csv-parser'
 import { Model } from 'mongoose'
@@ -106,11 +106,11 @@ async function bootstrap() {
     await postModel.insertMany(postsToCreate)
     logger.log(`--- [Bước 2] Đã tạo ${postsToCreate.length} Posts ---`)
 
-    for (const post of postsToCreate) {
-      await embeddingQueue.add('process-post-embedding', {
-        postId: post._id,
-      })
-    }
+    // for (const post of postsToCreate) {
+    //   await embeddingQueue.add('process-post-embedding', {
+    //     postId: post._id,
+    //   })
+    // }
     logger.log(`--- [Bước 2] Đã enqueue ${postsToCreate.length} job 'process-post-embedding' ---`)
   }
 
@@ -157,9 +157,9 @@ async function bootstrap() {
       })
 
       // 2. Enqueue job với payload chính xác
-      await embeddingQueue.add('process-persona-user-embedding', {
-        activityId: newActivity._id, // Chỉ cần truyền ID
-      })
+      // await embeddingQueue.add('process-persona-user-embedding', {
+      //   activityId: newActivity._id, // Chỉ cần truyền ID
+      // })
       count++
     }
     logger.log(`--- [Bước 3] Đã tạo ${total} UserActivities.`)

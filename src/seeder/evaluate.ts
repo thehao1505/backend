@@ -1,5 +1,5 @@
 import { NestFactory } from '@nestjs/core'
-import { AppModule } from './../../app.module' // Đường dẫn
+import { AppModule } from '../app.module' // Đường dẫn
 import { Model } from 'mongoose'
 import { getModelToken } from '@nestjs/mongoose'
 import { Logger } from '@nestjs/common'
@@ -122,12 +122,33 @@ async function bootstrap() {
     const meanRecall = mean(metrics.recallAtK)
     const MAP = mean(metrics.averagePrecisionAtK)
 
+    // Thống kê thêm
+    const usersWithHits = metrics.precisionAtK.filter(p => p > 0).length
+    const avgGroundTruthSize =
+      groundTruthMap.size > 0 ? Array.from(groundTruthMap.values()).reduce((sum, set) => sum + set.size, 0) / groundTruthMap.size : 0
+
     logger.log('--- 📊 KẾT QUẢ ĐÁNH GIÁ 📊 ---')
     logger.log(`Feed được đánh giá:      ${SOURCE_TO_EVALUATE}`)
     logger.log(`Số user được đánh giá: ${numUsers}`)
-    logger.log(`Mean Precision@${K}:    ${(meanPrecision * 100).toFixed(2)}%`)
-    logger.log(`Mean Recall@${K}:       ${(meanRecall * 100).toFixed(2)}%`)
-    logger.log(`MAP@${K}:                ${(MAP * 100).toFixed(2)}%`)
+    logger.log(`Số user có hits:        ${usersWithHits} (${((usersWithHits / numUsers) * 100).toFixed(2)}%)`)
+    logger.log(`Avg ground truth size:  ${avgGroundTruthSize.toFixed(4)}`)
+    logger.log(`Mean Precision@${K}:    ${(meanPrecision * 100).toFixed(4)}%`)
+    logger.log(`Mean Recall@${K}:       ${(meanRecall * 100).toFixed(4)}%`)
+    logger.log(`MAP@${K}:                ${(MAP * 100).toFixed(4)}%`)
+
+    // Phân tích chi tiết hơn
+    const precisionDistribution = {
+      zero: metrics.precisionAtK.filter(p => p === 0).length,
+      low: metrics.precisionAtK.filter(p => p > 0 && p < 0.1).length,
+      medium: metrics.precisionAtK.filter(p => p >= 0.1 && p < 0.3).length,
+      high: metrics.precisionAtK.filter(p => p >= 0.3).length,
+    }
+    logger.log(`Precision distribution:`)
+    logger.log(`  Zero:    ${precisionDistribution.zero} (${((precisionDistribution.zero / numUsers) * 100).toFixed(4)}%)`)
+    logger.log(`  Low:     ${precisionDistribution.low} (${((precisionDistribution.low / numUsers) * 100).toFixed(4)}%)`)
+    logger.log(`  Medium:  ${precisionDistribution.medium} (${((precisionDistribution.medium / numUsers) * 100).toFixed(4)}%)`)
+    logger.log(`  High:    ${precisionDistribution.high} (${((precisionDistribution.high / numUsers) * 100).toFixed(4)}%)`)
+
     logger.log('--- Hoàn tất ---')
   } catch (error) {
     logger.error('❌ ❌ ❌ Kịch bản thất bại:', error)
