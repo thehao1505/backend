@@ -16,7 +16,6 @@ import { v4 as uuidv4 } from 'uuid'
 export class RecommendationService {
   private readonly logger = new Logger(RecommendationService.name)
   private readonly CACHE_TTL = 60 * 30
-  private readonly METRICS_PREFIX = 'recommendation:metrics:'
   private readonly HYBRID_POOL_LIMIT = 100
 
   constructor(
@@ -32,7 +31,7 @@ export class RecommendationService {
     private readonly postService: PostService,
   ) {}
 
-  @Cron(CronExpression.EVERY_10_MINUTES)
+  // @Cron(CronExpression.EVERY_10_MINUTES)
   async handleEnqueuePostForEmbedding() {
     if (configs.isSkipCron === 'true') return
     const posts = await this.postModel
@@ -40,10 +39,10 @@ export class RecommendationService {
       .limit(100)
       .lean()
 
-    if (posts.length) return
+    if (!posts.length) return
 
     for (const post of posts) {
-      await this.enqueuePostForEmbedding(post._id.toString())
+      await this.enqueuePostForEmbedding(post._id)
     }
   }
 
@@ -483,14 +482,13 @@ export class RecommendationService {
 
     if (userScores.size === 0) return []
 
-    // 4. Tính Cosine Similarity
     const similarUsers = Array.from(userScores.entries()).map(([userId, overlapCount]) => {
       const similarity = overlapCount / Math.sqrt(overlapCount * myInteractions.length)
       return { userId: userId, similarity }
     })
 
-    // 5. Sắp xếp và lấy top 20
     similarUsers.sort((a, b) => b.similarity - a.similarity)
+
     return similarUsers.slice(0, 20)
   }
 
@@ -505,7 +503,6 @@ export class RecommendationService {
     })
 
     let viewInteractions: string[] = []
-    // trycatch here
     const viewAgg = await this.userActivityModel.aggregate([
       {
         $match: {

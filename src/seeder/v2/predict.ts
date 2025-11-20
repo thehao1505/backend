@@ -6,9 +6,10 @@ import { Logger } from '@nestjs/common'
 import { User } from '@entities' // Đường dẫn tới entities
 import { RecommendationService } from '@modules/recommendation/recommendation.service' // Đường dẫn tới service
 import { RecommendationLog } from '@entities' // Import log
+import { SEEDER_CONFIG } from './config'
 
-const K = 5 // Đánh giá Top 10
-const SOURCE = 'hybrid' // Đánh giá feed 'hybrid' (getHybridRecommendations)
+const K = SEEDER_CONFIG.K // Đánh giá Top 10
+const SOURCE: string = SEEDER_CONFIG.SOURCE // Đánh giá feed 'hybrid' (getHybridRecommendations)
 
 async function bootstrap() {
   const app = await NestFactory.createApplicationContext(AppModule)

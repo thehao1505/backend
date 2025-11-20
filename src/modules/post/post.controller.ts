@@ -13,6 +13,16 @@ import { PostEmbeddingInterceptor } from 'src/interceptors/post-embedding.interc
 export class PostController {
   constructor(private readonly postService: PostService) {}
 
+  @Get('embed-persona')
+  async embedPersona() {
+    return await this.postService.handlePersonaEmbeddings()
+  }
+
+  @Post('sync-post-data')
+  async syncPost() {
+    return await this.postService.syncPostInteractionData()
+  }
+
   @Post()
   @UseInterceptors(PostEmbeddingInterceptor)
   async createPost(@Req() req: Request, @Body() createPostDto: CreatePostDto) {

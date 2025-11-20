@@ -8,8 +8,8 @@ from collections import defaultdict
 import datetime
 
 # --- 1. CẤU HÌNH ---
-N_USERS = 1000
-N_POSTS = 5000
+N_USERS = 10000
+N_POSTS = 50000
 LATENT_DIMS = 64 # Số chiều "sở thích" (gu)
 DATA_PATH = './data_synthetic.log' # Thư mục để lưu CSV
 
@@ -352,3 +352,20 @@ if __name__ == "__main__":
     print("3. follows.csv (MỚI - Mạng xã hội)")
     print("4. train_interactions.csv (đã có LIKE, UNLIKE, REPLY_POST, SEARCH và Follow Bias)")
     print("5. test_interactions.csv (Dùng làm 'Đáp án' để đánh giá)")
+
+
+# Normalize cosine formula 
+# $$Similarity = \frac{Overlap}{\sqrt{|A| \times |B|}}$$
+# Feed được đánh giá:      cf
+# Số user được đánh giá: 10000
+# Mean Precision@10:     0.21%
+# Mean Recall@10:        0.53%
+# MAP@10:                0.31%
+
+# Công thức chế biến linh tinh
+# $$Score = \frac{Overlap}{\sqrt{Overlap \times |A|}} = \sqrt{\frac{Overlap}{|A|}}$$
+# Feed được đánh giá:      cf
+# Số user được đánh giá: 10000
+# Mean Precision@10:     0.21%
+# Mean Recall@10:        0.53%
+# MAP@10:                0.37%

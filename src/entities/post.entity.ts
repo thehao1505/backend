@@ -52,4 +52,8 @@ export class Post extends BaseEntity {
   clickCount: number
 }
 export const PostSchema = SchemaFactory.createForClass(Post)
+
+PostSchema.index({ author: 1, parentId: 1 })
+PostSchema.index({ parentId: 1, author: 1 })
+
 export type PostDocument = Post & Document

@@ -12,6 +12,11 @@ import { Request } from 'express'
 export class RecommendationController {
   constructor(private readonly recommendationService: RecommendationService) {}
 
+  @Get('embed-all-posts')
+  async embedPosts() {
+    return await this.recommendationService.handleEnqueuePostForEmbedding()
+  }
+
   @Get('embed-post/:postId')
   async embedPost(@Param('postId') postId: string) {
     return this.recommendationService.enqueuePostForEmbedding(postId)

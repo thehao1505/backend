@@ -11,8 +11,9 @@ import { v4 as uuidv4 } from 'uuid'
 import { Post, User, UserActivity, RecommendationLog, UserFollow, UserActivityType } from '@entities'
 import { QdrantService } from '@modules/index-service'
 import { configs } from '@utils/configs/config'
+import { SEEDER_CONFIG } from './config'
 
-const DATA_PATH = './data_synthetic.log'
+const DATA_PATH = SEEDER_CONFIG.DATA_PATH
 const USERS_FILE = `${DATA_PATH}/users.csv`
 const POSTS_FILE = `${DATA_PATH}/posts.csv`
 const TRAIN_INTERACTIONS_FILE = `${DATA_PATH}/train_interactions.csv`
@@ -41,9 +42,7 @@ async function bootstrap() {
     await userActivityModel.deleteMany({})
     await recLogModel.deleteMany({})
     await userFollowModel.deleteMany({})
-    await embeddingQueue.obliterate({ force: true }) // Xóa sạch job cũ
-
-    // Dọn dẹp Qdrant (An toàn hơn)
+    await embeddingQueue.obliterate({ force: true })
     try {
       await qdrantService.deleteCollection(configs.userCollectionName)
       logger.log(`Đã xóa collection ${configs.userCollectionName}`)
@@ -58,13 +57,7 @@ async function bootstrap() {
       logger.warn(`Không thể xóa ${configs.postCollectionName}: ${e.message}`)
     }
 
-    // [MỚI] Đợi 1 giây để Qdrant ổn định sau khi xóa
     await new Promise(resolve => setTimeout(resolve, 1000))
-
-    // [MỚI] Gọi trực tiếp createCollection mà không check exists
-    // (Bạn PHẢI đảm bảo hàm createCollection trong qdrant.service.ts
-    // không có check "exists" nữa, hoặc dùng recreateCollection)
-    // Tạm thời, chúng ta sẽ gọi hàm createCollection gốc:
 
     await qdrantService.createCollection(configs.userCollectionName)
     await qdrantService.createCollection(configs.postCollectionName)
@@ -77,7 +70,6 @@ async function bootstrap() {
     const usersToCreate: User[] = []
     const stream = fs.createReadStream(USERS_FILE).pipe(csv())
 
-    // Đọc tất cả user từ CSV vào bộ nhớ
     for await (const row of stream) {
       usersToCreate.push({
         _id: row.id,
@@ -86,32 +78,13 @@ async function bootstrap() {
         lastName: row.lastName,
         shortDescription: row.shortDescription,
         email: `${row.username}@synthetic.com`,
-        password: 'password123', // Hook pre('save') sẽ hash cái này
+        password: 'password',
         isEmbedded: false,
       } as User)
     }
 
-    // Lặp và create() từng user (chậm nhưng chính xác)
-    let count = 0
-    for (const userData of usersToCreate) {
-      try {
-        // 1. TẠO USER: Lệnh này sẽ đợi và kích hoạt hooks
-        const newUser = await userModel.create(userData) // Dùng create()
-        count++
-
-        // 2. ENQUEUE JOB: Chỉ enqueue SAU KHI user đã được tạo thành công
-        await embeddingQueue.add('process-profile-user-embedding', {
-          userId: newUser._id,
-        })
-
-        if (count % 100 === 0) {
-          logger.log(`Đã tạo VÀ enqueued ${count}/${usersToCreate.length} users...`)
-        }
-      } catch (e) {
-        logger.warn(`Lỗi khi tạo/enqueue user ${userData.username}: ${e.message}`)
-      }
-    }
-    logger.log(`--- [Bước 1] Đã tạo và enqueued ${count} Users ---`)
+    await userModel.create(usersToCreate)
+    logger.log(`--- [Bước 1] Đã tạo và enqueued ${usersToCreate.length} Users ---`)
   }
 
   async function seedPosts() {
@@ -185,7 +158,7 @@ async function bootstrap() {
 
       // 2. Enqueue job với payload chính xác
       await embeddingQueue.add('process-persona-user-embedding', {
-        activityId: newActivity._id.toString(), // Chỉ cần truyền ID
+        activityId: newActivity._id, // Chỉ cần truyền ID
       })
       count++
     }

@@ -10,7 +10,6 @@ import { Queue } from 'bullmq'
 import { NotificationPayload } from '@dtos/notification.dto'
 import { estimateDwellTimeThreshold } from '@utils/utils'
 import { Cron, CronExpression } from '@nestjs/schedule'
-import { InteractionType } from '@utils/enum'
 
 @Injectable()
 export class PostService {
@@ -21,6 +20,7 @@ export class PostService {
     @Inject(forwardRef(() => NotificationService)) private readonly notificationService: NotificationService,
     @Inject(forwardRef(() => UserService)) private readonly userService: UserService,
     @InjectQueue('notifications') private notificationQueue: Queue,
+    @InjectQueue('embedding') private readonly embeddingQueue: Queue,
   ) {}
 
   @Cron(CronExpression.EVERY_DAY_AT_MIDNIGHT)
@@ -79,6 +79,21 @@ export class PostService {
       return { success: true, message: 'Updated post interaction data' }
     } catch (error) {
       throw new Error(`Cant sync: ${error.message}`)
+    }
+  }
+
+  async handlePersonaEmbeddings() {
+    const interactions = await this.userActivityModel
+      .find({ isEmbedded: { $ne: true } })
+      .select('_id')
+      .lean()
+
+    if (!interactions.length) return
+
+    for (const int of interactions) {
+      await this.embeddingQueue.add('process-persona-user-embedding', {
+        activityId: int._id,
+      })
     }
   }
 

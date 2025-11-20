@@ -13,6 +13,11 @@ import { UserEmbeddingInterceptor } from 'src/interceptors/user-embedding.interc
 export class UserController {
   constructor(private readonly userService: UserService) {}
 
+  @Post('sync-follows')
+  async syncFollows() {
+    return this.userService.syncUserFollowData()
+  }
+
   @Get('process-profile-user-embedding/:userId')
   async embedProfileUser(@Param('userId') userId: string) {
     return this.userService.enqueueUserForEmbedding(userId)

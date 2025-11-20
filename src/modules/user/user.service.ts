@@ -27,16 +27,14 @@ export class UserService {
 
   // @Cron(CronExpression.EVERY_DAY_AT_MIDNIGHT)
   async handleEnqueueUserForEmbedding() {
-    if (configs.isSkipCron === 'true') {
-      console.log('a')
-      return
-    }
+    if (configs.isSkipCron === 'true') return
+
     const users = await this.userModel
       .find({ isEmbedded: { $ne: true } })
       .limit(100)
       .lean()
 
-    if (users.length) return
+    if (!users.length) return
 
     for (const user of users) {
       await this.enqueueUserForEmbedding(user._id.toString())

@@ -63,46 +63,53 @@ export class EmbeddingProcessor extends WorkerHost {
 
     if (job.name === 'process-profile-user-embedding') {
       const { userId } = job.data
-      this.logger.log(`Processing embedding for user: ${userId}`)
+      // this.logger.log(`Processing embedding for user: ${userId}`)
 
-      try {
-        const user = await this.userModel.findById(userId)
-        if (!user) {
-          throw new Error(`User not found: ${userId}`)
-        }
+      // try {
+      //   const user = await this.userModel.findById(userId)
+      //   if (!user) {
+      //     throw new Error(`User not found: ${userId}`)
+      //   }
 
-        await this.embedUser(user)
+      //   await this.embedUser(user)
 
-        await this.userModel.findByIdAndUpdate(
-          user._id,
-          {
-            $set: {
-              isEmbedded: true,
-              lastEmbeddedAt: new Date(),
-            },
-          },
-          { new: true },
-        )
+      //   await this.userModel.findByIdAndUpdate(
+      //     user._id,
+      //     {
+      //       $set: {
+      //         isEmbedded: true,
+      //         lastEmbeddedAt: new Date(),
+      //       },
+      //     },
+      //     { new: true },
+      //   )
 
-        this.logger.log(`Successfully processed embedding for user: ${userId}`)
-        return { success: true, userId }
-      } catch (error) {
-        this.logger.error(`Error processing embedding for user ${userId}: ${error.message}`)
-        throw error
-      }
+      //   this.logger.log(`Successfully processed embedding for user: ${userId}`)
+      //   return { success: true, userId }
+      // } catch (error) {
+      //   this.logger.error(`Error processing embedding for user ${userId}: ${error.message}`)
+      //   throw error
+      // }
+
+      this.logger.log(`Skipping embedding for user profile: ${userId} (Disabled by config)`)
+      return { success: true, userId, skipped: true }
     }
 
     if (job.name === 'process-persona-user-embedding') {
-      const { activityId, vector } = job.data
-      this.logger.log(`Processing embedding persona for activityId: ${activityId}`)
+      try {
+        const { activityId, vector } = job.data
+        this.logger.log(`Processing embedding persona for activityId: ${activityId}`)
 
-      await this.updateUserEmbeddingFromActivity(activityId, vector)
-      return { success: true, activityId }
+        await this.updateUserEmbeddingFromActivity(activityId, vector)
+        return { success: true, activityId }
+      } catch (error) {
+        this.logger.error(error)
+        throw error
+      }
     }
   }
 
   private async updateUserEmbeddingFromActivity(activityId: string, vector?: number[]) {
-    this.logger.debug(vector[0], vector.length)
     const activity = await this.userActivityModel.findById(activityId)
 
     if (!activity) {

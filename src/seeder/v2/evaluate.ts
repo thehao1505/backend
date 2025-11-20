@@ -6,10 +6,12 @@ import { Logger } from '@nestjs/common'
 import { RecommendationLog } from '@entities' // Đường dẫn
 import * as fs from 'fs'
 import * as csv from 'csv-parser'
+import { SEEDER_CONFIG } from './config'
 
-const TEST_INTERACTIONS_FILE = './data_synthetic.log/test_interactions.csv'
-const SOURCE_TO_EVALUATE = 'hybrid' // Đảm bảo khớp với SOURCE trong predict.ts
-const K = 5 // Đánh giá P@10, R@10, MAP@10
+const DATA_PATH = SEEDER_CONFIG.DATA_PATH
+const TEST_INTERACTIONS_FILE = `${DATA_PATH}/test_interactions.csv`
+const SOURCE_TO_EVALUATE = SEEDER_CONFIG.SOURCE // Đảm bảo khớp với SOURCE trong predict.ts
+const K = SEEDER_CONFIG.K // Đánh giá P@10, R@10, MAP@10
 
 /**
  * Helper tính P@K, R@K, AP@K

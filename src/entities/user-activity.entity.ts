@@ -40,4 +40,8 @@ export class UserActivity extends BaseEntity {
   lastEmbeddedAt: Date
 }
 export const UserActivitySchema = SchemaFactory.createForClass(UserActivity)
+
+UserActivitySchema.index({ userId: 1, postId: 1, userActivityType: 1 })
+UserActivitySchema.index({ postId: 1, userId: 1, userActivityType: 1 })
+
 export type UserActivityDocument = UserActivity & Document
