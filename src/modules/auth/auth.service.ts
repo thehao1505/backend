@@ -19,7 +19,9 @@ export class AuthService {
 
   async register(registerDto: RegisterDto) {
     if (!registerDto.username && !registerDto.email) throw new ForbiddenException('Username or email is required!')
-
+    if (!registerDto.persona || registerDto.persona.length < 1) {
+      throw new ForbiddenException('Persona is required and must have at least 1 item!')
+    }
     const existingUser = await this.userModel.findOne({ email: registerDto.email }).lean()
     if (existingUser) throw new ForbiddenException('Email already exists!')
 

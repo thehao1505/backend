@@ -1,5 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger'
-import { IsString, MinLength, MaxLength, Matches, IsNotEmpty, IsOptional } from 'class-validator'
+import { IsString, MinLength, MaxLength, Matches, IsNotEmpty, IsOptional, IsArray } from 'class-validator'
 
 export class AuthDto {
   @ApiPropertyOptional({
@@ -59,6 +59,12 @@ export class RegisterDto {
   })
   @IsString()
   password: string
+
+  @ApiProperty({
+    example: ['tech', 'travel', 'food'],
+  })
+  @IsArray()
+  persona: string[]
 }
 
 export class ForgotPasswordDto {
