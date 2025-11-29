@@ -11,12 +11,15 @@ import { configs } from '@utils/configs/config'
 import { Queue } from 'bullmq'
 import { Model, Types } from 'mongoose'
 import { v4 as uuidv4 } from 'uuid'
+import * as fs from 'fs'
+import * as path from 'path'
 
 @Injectable()
 export class RecommendationService {
   private readonly logger = new Logger(RecommendationService.name)
   private readonly CACHE_TTL = 60 * 30
   private readonly HYBRID_POOL_LIMIT = 100
+  private readonly CSV_EXPORT_PATH = process.env.CSV_EXPORT_PATH || './data_offline_eval'
 
   constructor(
     @InjectModel(Post.name) private readonly postModel: Model<Post>,
@@ -76,13 +79,7 @@ export class RecommendationService {
         must_not: [{ key: 'postId', match: { value: postId.toString() } }],
       }
 
-      const similar = await this.qdrantService.searchSimilar(
-        configs.postCollectionName,
-        postVector,
-        Number(limit),
-        Number(page - 1),
-        filter,
-      )
+      const similar = await this.qdrantService.searchSimilar(configs.postCollectionName, postVector, Number(limit), Number(page), filter)
 
       const similarPostIds = similar.map(item => item.id).filter(id => id !== postId)
       const total = similarPostIds.length
@@ -601,7 +598,7 @@ export class RecommendationService {
     const postDate = new Date(post.createdAt)
     const hoursDiff = (now.getTime() - postDate.getTime()) / (1000 * 60 * 60)
     // Giảm 50% "giá trị" sau mỗi 24 giờ
-    return Math.exp(-hoursDiff / 24)
+    return Math.exp(-hoursDiff / (14 * 24))
   }
 
   private async _getUserInterestVector(userId: string): Promise<number[] | null> {
@@ -657,9 +654,52 @@ export class RecommendationService {
       // Lưu vào DB.
       // Chúng ta không `await` ở hàm gọi để không block response trả về user.
       await log.save()
+
+      // Export ra CSV (async, không block)
+      this._exportRecommendationToCsv(userId, source, postIds).catch(err => {
+        this.logger.warn(`[CSV Export] Lỗi khi export CSV: ${err.message}`)
+      })
     } catch (error) {
       // Quan trọng: Bắt lỗi ở đây để không làm crash hàm recommendation chính
       this.logger.error(`[Metrics] Lỗi khi ghi log recommendations: ${error.message}`)
+    }
+  }
+
+  /**
+   * Export recommendation log ra CSV file
+   * Format: userId,postIds,source
+   * postIds được phân cách bằng |
+   */
+  private async _exportRecommendationToCsv(userId: string, source: string, postIds: string[]): Promise<void> {
+    try {
+      // Tạo thư mục nếu chưa có
+      if (!fs.existsSync(this.CSV_EXPORT_PATH)) {
+        fs.mkdirSync(this.CSV_EXPORT_PATH, { recursive: true })
+      }
+
+      const csvFileName = `recommendations_${source}.csv`
+      const csvFilePath = path.join(this.CSV_EXPORT_PATH, csvFileName)
+
+      // Kiểm tra xem file đã tồn tại chưa để quyết định có cần ghi header không
+      const fileExists = fs.existsSync(csvFilePath)
+      const fileHandle = fs.openSync(csvFilePath, 'a') // Append mode
+
+      try {
+        // Ghi header nếu file mới tạo
+        if (!fileExists) {
+          fs.writeSync(fileHandle, 'userId,postIds,source\n')
+        }
+
+        // Ghi dòng dữ liệu mới
+        const postIdsStr = postIds.join('|')
+        const csvLine = `${userId},${postIdsStr},${source}\n`
+        fs.writeSync(fileHandle, csvLine)
+      } finally {
+        fs.closeSync(fileHandle)
+      }
+    } catch (error) {
+      // Log lỗi nhưng không throw để không ảnh hưởng đến flow chính
+      this.logger.warn(`[CSV Export] Không thể export recommendation ra CSV: ${error.message}`)
     }
   }
 }

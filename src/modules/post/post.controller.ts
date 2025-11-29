@@ -13,9 +13,14 @@ import { PostEmbeddingInterceptor } from 'src/interceptors/post-embedding.interc
 export class PostController {
   constructor(private readonly postService: PostService) {}
 
-  @Get('embed-persona')
+  @Get('embed/all-persona-user')
   async embedPersona() {
     return await this.postService.handlePersonaEmbeddings()
+  }
+
+  @Get('embed/all-profile-user')
+  async embedAllProfileUser() {
+    return this.postService.handleEnqueueUserForEmbedding()
   }
 
   @Post('sync-post-data')

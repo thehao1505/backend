@@ -1,11 +1,11 @@
 import { Prop } from '@nestjs/mongoose'
 import { Document } from 'mongoose'
-import { v4 as uuidv4 } from 'uuid'
+import { v7 as uuidv7 } from 'uuid'
 
 export class BaseEntity extends Document {
   @Prop({
     type: String,
-    default: () => uuidv4(),
+    default: () => uuidv7(),
   })
   _id: string
   createdAt: Date

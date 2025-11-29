@@ -1,15 +1,39 @@
 import { NestFactory } from '@nestjs/core'
-import { AppModule } from '../app.module' // Đường dẫn tới AppModule
+import { AppModule } from '../app.module'
 import { Model } from 'mongoose'
 import { getModelToken } from '@nestjs/mongoose'
 import { Logger } from '@nestjs/common'
-import { User } from '@entities' // Đường dẫn tới entities
-import { RecommendationService } from '@modules/recommendation/recommendation.service' // Đường dẫn tới service
-import { RecommendationLog } from '@entities' // Import log
+import { User, RecommendationLog } from '@entities'
+import { RecommendationService } from '@modules/recommendation/recommendation.service'
 import { SEEDER_CONFIG } from './config'
+import * as fs from 'fs'
+import * as csv from 'csv-parser'
+import * as path from 'path'
 
-const K = SEEDER_CONFIG.K // Đánh giá Top 10
-const SOURCE: string = SEEDER_CONFIG.SOURCE // Đánh giá feed 'hybrid' (getHybridRecommendations)
+const K = SEEDER_CONFIG.K || 10
+const SOURCE: string = SEEDER_CONFIG.SOURCE || 'hybrid'
+const DATA_PATH = SEEDER_CONFIG.DATA_PATH || './data_offline_eval'
+const TEST_INTERACTIONS_FILE = path.join(DATA_PATH, 'test_interactions.csv')
+
+/**
+ * Load danh sách users cần đánh giá từ test set
+ */
+async function loadTestUsers(): Promise<Set<string>> {
+  const testUsers = new Set<string>()
+
+  if (!fs.existsSync(TEST_INTERACTIONS_FILE)) {
+    throw new Error(`File test_interactions.csv không tồn tại tại: ${TEST_INTERACTIONS_FILE}`)
+  }
+
+  const stream = fs.createReadStream(TEST_INTERACTIONS_FILE).pipe(csv())
+  for await (const row of stream) {
+    if (row.userId) {
+      testUsers.add(row.userId)
+    }
+  }
+
+  return testUsers
+}
 
 async function bootstrap() {
   const app = await NestFactory.createApplicationContext(AppModule)
@@ -19,41 +43,153 @@ async function bootstrap() {
   const recLogModel = app.get<Model<RecommendationLog>>(getModelToken(RecommendationLog.name))
   const recommendationService = app.get<RecommendationService>(RecommendationService)
 
-  logger.log(`--- [Bước 3] Bắt đầu dự đoán (Predict) Top ${K} cho feed '${SOURCE}' ---`)
+  logger.log(`=== Bắt đầu dự đoán (Predict) Top ${K} cho feed '${SOURCE}' ===`)
 
   try {
-    // Xóa log cũ
+    // Load danh sách users cần đánh giá (chỉ users có trong test set)
+    logger.log('Đang load danh sách users từ test set...')
+    const testUsers = await loadTestUsers()
+    logger.log(`Tìm thấy ${testUsers.size} users trong test set`)
+
+    if (testUsers.size === 0) {
+      throw new Error('Không có user nào trong test set. Hãy chạy generate_offline_eval_data.ts trước.')
+    }
+
+    // Xóa log cũ cho source này
     await recLogModel.deleteMany({ source: SOURCE })
-    logger.log('Đã xóa log dự đoán cũ.')
+    logger.log(`Đã xóa log dự đoán cũ cho source: ${SOURCE}`)
 
-    const userIds = await userModel.find({}, '_id').lean()
-    const totalUsers = userIds.length
+    // Lấy tất cả users từ database
+    const allUsers = await userModel.find({ _id: { $in: Array.from(testUsers) } }, '_id').lean()
+    logger.log(`Tìm thấy ${allUsers.length} users trong database (trong số ${testUsers.size} users test)`)
 
-    logger.log(`Tìm thấy ${totalUsers} users. Bắt đầu lặp...`)
+    let processed = 0
+    let errors = 0
+    let emptyRecommendations = 0
 
-    for (let i = 0; i < totalUsers; i++) {
-      const userId = userIds[i]._id.toString()
+    // Dự đoán cho từng user
+    for (const user of allUsers) {
+      const userId = user._id.toString()
 
-      // Tùy thuộc vào SOURCE, gọi hàm tương ứng
-      // Hàm này sẽ tự động gọi _logRecommendations (từ code service của bạn)
-      if (SOURCE === 'hybrid') {
-        await recommendationService.getHybridRecommendations(userId, { page: 1, limit: K })
-      } else if (SOURCE === 'cbf') {
-        await recommendationService.getRecommendations_CBF(userId, { page: 1, limit: K })
-      } else if (SOURCE === 'cf') {
-        await recommendationService.getRecommendations_CF(userId, { page: 1, limit: K })
-      }
+      try {
+        // Gọi recommendation service tùy theo SOURCE
+        let result
+        if (SOURCE === 'hybrid') {
+          result = await recommendationService.getHybridRecommendations(userId, { page: 1, limit: K })
+        } else if (SOURCE === 'cbf') {
+          result = await recommendationService.getRecommendations_CBF(userId, { page: 1, limit: K })
+        } else if (SOURCE === 'cf') {
+          result = await recommendationService.getRecommendations_CF(userId, { page: 1, limit: K })
+        } else {
+          throw new Error(`SOURCE không hợp lệ: ${SOURCE}. Chọn: 'hybrid', 'cbf', hoặc 'cf'`)
+        }
 
-      if ((i + 1) % 10 === 0) {
-        logger.log(`Đã xử lý ${i + 1}/${totalUsers} users...`)
+        // Kiểm tra xem có recommendations không
+        if (!result || !result.items || result.items.length === 0) {
+          emptyRecommendations++
+          if (emptyRecommendations <= 5) {
+            logger.warn(`[WARN] User ${userId}: Không có recommendations (total: ${result?.total || 0})`)
+          }
+        } else {
+          // Debug: Log một vài recommendations đầu tiên
+          if (processed < 3) {
+            const log = await recLogModel.findOne({ userId, source: SOURCE }).lean()
+            if (log) {
+              logger.log(`[DEBUG] User ${userId}: ${log.shownPostIds.length} recommendations`)
+              if (log.shownPostIds.length > 0) {
+                logger.log(
+                  `[DEBUG] Sample postIds: ${log.shownPostIds
+                    .slice(0, 3)
+                    .map(id => id.toString())
+                    .join(', ')}`,
+                )
+              }
+            }
+          }
+        }
+
+        processed++
+
+        if (processed % 50 === 0) {
+          logger.log(`Đã xử lý ${processed}/${allUsers.length} users... (Empty: ${emptyRecommendations})`)
+        }
+      } catch (error) {
+        errors++
+        logger.warn(`Lỗi khi dự đoán cho user ${userId}: ${error.message}`)
+        // Tiếp tục với user tiếp theo
       }
     }
 
-    logger.log('✅ ✅ ✅ Hoàn tất việc dự đoán (Predict)!')
+    // Kiểm tra số lượng logs đã tạo
+    const logCount = await recLogModel.countDocuments({ source: SOURCE })
+    const logsWithItems = await recLogModel.countDocuments({ source: SOURCE, shownPostIds: { $exists: true, $ne: [] } })
+    const logsEmpty = await recLogModel.countDocuments({
+      source: SOURCE,
+      $or: [{ shownPostIds: { $exists: false } }, { shownPostIds: [] }],
+    })
+
+    logger.log(`\n📊 Thống kê:`)
+    logger.log(`  - Users đã xử lý: ${processed}`)
+    logger.log(`  - Lỗi: ${errors}`)
+    logger.log(`  - Logs đã tạo: ${logCount}`)
+    logger.log(`  - Logs có recommendations: ${logsWithItems}`)
+    logger.log(`  - Logs rỗng: ${logsEmpty}`)
+    logger.log(`  - Users không có recommendations: ${emptyRecommendations}`)
+
+    if (logCount === 0) {
+      logger.warn('⚠️  Không có log nào được tạo. Có thể recommendation service không tạo recommendations.')
+    } else if (logsEmpty > 0) {
+      logger.warn(`⚠️  Có ${logsEmpty} logs rỗng. Có thể CF không tìm thấy similar users hoặc candidates.`)
+    }
+
+    logger.log('\n✅ ✅ ✅ Hoàn tất việc dự đoán (Predict)!')
     logger.log(`Dữ liệu đã được lưu vào "RecommendationLog" với source: '${SOURCE}'.`)
-    logger.log('Bây giờ, chạy script "evaluate.ts".')
+
+    // Export recommendations ra CSV
+    logger.log(`\n=== Exporting Recommendations to CSV ===`)
+    logger.log(`Source: ${SOURCE}`)
+    logger.log(`Output: ${DATA_PATH}/recommendations_${SOURCE}.csv`)
+
+    try {
+      // Tạo thư mục nếu chưa có
+      if (!fs.existsSync(DATA_PATH)) {
+        fs.mkdirSync(DATA_PATH, { recursive: true })
+      }
+
+      // Lấy tất cả recommendations từ database
+      const logs = await recLogModel.find({ source: SOURCE }).lean()
+
+      if (logs.length === 0) {
+        logger.warn(`⚠️ Không tìm thấy RecommendationLog để export.`)
+      } else {
+        logger.log(`Tìm thấy ${logs.length} recommendations để export`)
+
+        // Tạo CSV content
+        const csvLines = ['userId,postIds,source']
+
+        for (const log of logs) {
+          const userId = log.userId.toString()
+          const postIds = (log.shownPostIds || []).map(id => id.toString()).join('|')
+          const source = log.source || SOURCE
+
+          csvLines.push(`${userId},${postIds},${source}`)
+        }
+
+        // Ghi file
+        const outputPath = path.join(DATA_PATH, `recommendations_${SOURCE}.csv`)
+        fs.writeFileSync(outputPath, csvLines.join('\n'))
+
+        logger.log(`✅ Đã export ${logs.length} recommendations vào ${outputPath}`)
+      }
+    } catch (exportError) {
+      logger.warn(`⚠️ Lỗi khi export CSV: ${exportError.message}`)
+      // Không throw error để không làm gián đoạn flow chính
+    }
+
+    logger.log('\n✅ Hoàn tất! Bây giờ, chạy script "evaluate.ts" để đánh giá.')
   } catch (error) {
     logger.error('❌ ❌ ❌ Kịch bản thất bại:', error)
+    throw error
   } finally {
     await app.close()
   }

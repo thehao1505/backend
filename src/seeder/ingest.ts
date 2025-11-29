@@ -80,11 +80,20 @@ async function bootstrap() {
         email: `${row.username}@synthetic.com`,
         password: 'password',
         isEmbedded: false,
+        persona: row.persona ? row.persona.split('|') : [],
       } as User)
     }
 
     await userModel.create(usersToCreate)
-    logger.log(`--- [Bước 1] Đã tạo và enqueued ${usersToCreate.length} Users ---`)
+
+    if (SEEDER_CONFIG.IS_EMBEDDED) {
+      for (const user of usersToCreate) {
+        await embeddingQueue.add('process-profile-user-embedding', { userId: user._id })
+      }
+      logger.log(`--- [Bước 1] Đã enqueue ${usersToCreate.length} job 'process-profile-user-embedding' ---`)
+    } else {
+      logger.log(`--- [Bước 1] Đã tạo ${usersToCreate.length} Users ---`)
+    }
   }
 
   async function seedPosts() {
@@ -100,18 +109,21 @@ async function bootstrap() {
         dwellTimeThreshold: parseInt(row.dwellTimeThreshold, 10) || 3000,
         createdAt: new Date(row.createdAt),
         isEmbedded: false,
+        parentId: row.parentId || null,
       } as Post)
     }
 
     await postModel.insertMany(postsToCreate)
     logger.log(`--- [Bước 2] Đã tạo ${postsToCreate.length} Posts ---`)
 
-    // for (const post of postsToCreate) {
-    //   await embeddingQueue.add('process-post-embedding', {
-    //     postId: post._id,
-    //   })
-    // }
-    logger.log(`--- [Bước 2] Đã enqueue ${postsToCreate.length} job 'process-post-embedding' ---`)
+    if (SEEDER_CONFIG.IS_EMBEDDED) {
+      for (const post of postsToCreate) {
+        await embeddingQueue.add('process-post-embedding', { postId: post._id })
+      }
+      logger.log(`--- [Bước 2] Đã enqueue ${postsToCreate.length} job 'process-post-embedding' ---`)
+    } else {
+      logger.log(`--- [Bước 2] Đã tạo ${postsToCreate.length} Posts ---`)
+    }
   }
 
   async function seedFollows() {
@@ -150,16 +162,18 @@ async function bootstrap() {
         _id: row.id || uuidv4(),
         userId: row.userId,
         postId: row.postId || null,
-        userActivityType: row.type as UserActivityType,
+        userActivityType: row.userActivityType as UserActivityType,
         dwellTime: row.dwellTime ? parseInt(row.dwellTime, 10) : null,
         searchText: row.searchText || null,
         createdAt: new Date(row.createdAt),
       })
 
       // 2. Enqueue job với payload chính xác
-      // await embeddingQueue.add('process-persona-user-embedding', {
-      //   activityId: newActivity._id, // Chỉ cần truyền ID
-      // })
+      if (SEEDER_CONFIG.IS_EMBEDDED) {
+        await embeddingQueue.add('process-persona-user-embedding', { activityId: newActivity._id })
+      } else {
+        logger.log(`--- [Bước 3] Đã tạo ${newActivity._id} UserActivity ---`)
+      }
       count++
     }
     logger.log(`--- [Bước 3] Đã tạo ${total} UserActivities.`)
@@ -172,7 +186,6 @@ async function bootstrap() {
     await seedPosts()
     await seedFollows()
     await seedInteractions()
-
     logger.log('✅ ✅ ✅ Hoàn tất việc nuôi dữ liệu (Ingestion)!')
     logger.log('Đang khởi động lại (resume) queue cho worker...')
 

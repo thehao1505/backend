@@ -18,7 +18,10 @@
     "test:cov": "jest --coverage",
     "test:debug": "node --inspect-brk -r tsconfig-paths/register -r ts-node/register node_modules/.bin/jest --runInBand",
     "test:e2e": "jest --config ./test/jest-e2e.json",
-    "oe:gen-data": "npx ts-node -r tsconfig-paths/register src/seeder/generate_dataset.ts",
+    "oe:gen-data": "npx ts-node -r tsconfig-paths/register src/seeder/generate_data.ts",
+    "oe:gen-offline-eval": "npx ts-node -r tsconfig-paths/register src/seeder/generate_offline_eval_data.ts",
+    "oe:gen-p-law-offline-eval": "npx ts-node -r tsconfig-paths/register src/seeder/p_law_offline_eval_data.ts",
+    "oe:debug-data": "npx ts-node -r tsconfig-paths/register src/seeder/debug_data.ts",
     "oe:ingest": "npx ts-node -r tsconfig-paths/register src/seeder/ingest.ts",
     "oe:predict": "npx ts-node -r tsconfig-paths/register src/seeder/predict.ts",
     "oe:evaluate": "npx ts-node -r tsconfig-paths/register src/seeder/evaluate.ts"

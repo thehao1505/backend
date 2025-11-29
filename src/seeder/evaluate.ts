@@ -1,38 +1,49 @@
 import { NestFactory } from '@nestjs/core'
-import { AppModule } from '../app.module' // Đường dẫn
+import { AppModule } from '../app.module'
 import { Model } from 'mongoose'
 import { getModelToken } from '@nestjs/mongoose'
 import { Logger } from '@nestjs/common'
-import { RecommendationLog } from '@entities' // Đường dẫn
+import { RecommendationLog } from '@entities'
 import * as fs from 'fs'
 import * as csv from 'csv-parser'
+import * as path from 'path'
 import { SEEDER_CONFIG } from './config'
 
-const DATA_PATH = SEEDER_CONFIG.DATA_PATH
-const TEST_INTERACTIONS_FILE = `${DATA_PATH}/test_interactions.csv`
-const SOURCE_TO_EVALUATE = SEEDER_CONFIG.SOURCE // Đảm bảo khớp với SOURCE trong predict.ts
-const K = SEEDER_CONFIG.K // Đánh giá P@10, R@10, MAP@10
+const DATA_PATH = SEEDER_CONFIG.DATA_PATH || './data_offline_eval'
+const TEST_INTERACTIONS_FILE = path.join(DATA_PATH, 'test_interactions.csv')
+const SOURCE_TO_EVALUATE = SEEDER_CONFIG.SOURCE || 'hybrid'
+const K = SEEDER_CONFIG.K || 10
 
 /**
- * Helper tính P@K, R@K, AP@K
+ * Helper tính P@K, R@K, AP@K, NDCG@K
  */
-function calculateUserMetrics(recommendations: string[], groundTruth: Set<string>, K: number) {
-  // 1. Kiểm tra Ground Truth (Chỉ kiểm tra 1 lần ở đây)
+function calculateUserMetrics(
+  recommendations: string[],
+  groundTruth: Set<string>,
+  K: number,
+): { p_at_k: number | null; r_at_k: number | null; ap_at_k: number | null; ndcg_at_k: number | null } {
   if (groundTruth.size === 0) {
-    return { p_at_k: null, r_at_k: null, ap_at_k: null }
+    return { p_at_k: null, r_at_k: null, ap_at_k: null, ndcg_at_k: null }
   }
 
   let hits = 0
   let precisionSum = 0
+  let dcg = 0
   const n = Math.min(recommendations.length, K)
 
   for (let k = 0; k < n; k++) {
     const item = recommendations[k]
-    if (groundTruth.has(item)) {
+    const isRelevant = groundTruth.has(item) ? 1 : 0
+
+    if (isRelevant) {
       hits++
       const precision_at_k_plus_1 = hits / (k + 1)
       precisionSum += precision_at_k_plus_1
     }
+
+    // NDCG: relevance score = 1 if relevant, 0 otherwise
+    // DCG = sum(relevance / log2(position + 1))
+    dcg += isRelevant / Math.log2(k + 2)
   }
 
   const totalRelevantItems = groundTruth.size
@@ -41,9 +52,14 @@ function calculateUserMetrics(recommendations: string[], groundTruth: Set<string
   const r_at_k = hits / totalRelevantItems
   const ap_at_k = precisionSum / totalRelevantItems
 
-  // 2. [ĐÃ XÓA] Khối "if (totalRelevantItems === 0)" thừa ở đây
+  // Ideal DCG: giả sử tất cả relevant items ở top
+  let idcg = 0
+  for (let i = 0; i < Math.min(totalRelevantItems, K); i++) {
+    idcg += 1 / Math.log2(i + 2)
+  }
+  const ndcg_at_k = idcg > 0 ? dcg / idcg : 0
 
-  return { p_at_k, r_at_k, ap_at_k }
+  return { p_at_k, r_at_k, ap_at_k, ndcg_at_k }
 }
 
 /**
@@ -51,16 +67,25 @@ function calculateUserMetrics(recommendations: string[], groundTruth: Set<string
  */
 async function loadGroundTruth(): Promise<Map<string, Set<string>>> {
   const truthMap = new Map<string, Set<string>>()
+
+  if (!fs.existsSync(TEST_INTERACTIONS_FILE)) {
+    throw new Error(`File test_interactions.csv không tồn tại tại: ${TEST_INTERACTIONS_FILE}`)
+  }
+
   const stream = fs.createReadStream(TEST_INTERACTIONS_FILE).pipe(csv())
 
   for await (const row of stream) {
     const userId = row.userId
     const postId = row.postId
+
+    if (!userId || !postId) continue
+
     if (!truthMap.has(userId)) {
       truthMap.set(userId, new Set<string>())
     }
     truthMap.get(userId)!.add(postId)
   }
+
   return truthMap
 }
 
@@ -70,25 +95,68 @@ async function bootstrap() {
 
   const recLogModel = app.get<Model<RecommendationLog>>(getModelToken(RecommendationLog.name))
 
-  logger.log(`--- [Bước 4] Bắt đầu đánh giá (Evaluate) @ K=${K} cho feed '${SOURCE_TO_EVALUATE}' ---`)
+  logger.log(`=== Bắt đầu đánh giá (Evaluate) @ K=${K} cho feed '${SOURCE_TO_EVALUATE}' ===`)
 
   try {
     // 1. Đọc "Đáp án" (Ground Truth)
+    logger.log('Đang load ground truth từ test_interactions.csv...')
     const groundTruthMap = await loadGroundTruth()
     logger.log(`Đã tải ${groundTruthMap.size} users từ file test (ground truth).`)
 
+    if (groundTruthMap.size === 0) {
+      throw new Error('Không có ground truth nào. Hãy chạy generate_offline_eval_data.ts trước.')
+    }
+
     // 2. Đọc "Dự đoán" (Predictions)
+    logger.log(`Đang load predictions từ RecommendationLog với source='${SOURCE_TO_EVALUATE}'...`)
     const logs = await recLogModel.find({ source: SOURCE_TO_EVALUATE }).lean()
+
     if (logs.length === 0) {
       throw new Error(`Không tìm thấy RecommendationLog cho source='${SOURCE_TO_EVALUATE}'. Bạn đã chạy script "predict.ts" chưa?`)
     }
     logger.log(`Đã tải ${logs.length} dự đoán từ RecommendationLog.`)
 
-    const metrics = {
-      precisionAtK: [],
-      recallAtK: [],
-      averagePrecisionAtK: [],
+    // Debug: Kiểm tra một vài recommendations và ground truth
+    if (logs.length > 0) {
+      const sampleLog = logs.find(l => l.shownPostIds && l.shownPostIds.length > 0) || logs[0]
+      const sampleUserId = sampleLog.userId.toString()
+      const samplePredictions = (sampleLog.shownPostIds || []).map(id => id.toString())
+      const sampleTruth = groundTruthMap.get(sampleUserId) || new Set<string>()
+
+      logger.log(`\n[DEBUG] Sample User: ${sampleUserId}`)
+      logger.log(`  Predictions count: ${samplePredictions.length}`)
+      logger.log(`  Ground Truth count: ${sampleTruth.size}`)
+      if (samplePredictions.length > 0) {
+        logger.log(`  Predictions (first 5): ${samplePredictions.slice(0, 5).join(', ')}`)
+      }
+      if (sampleTruth.size > 0) {
+        logger.log(`  Ground Truth (first 5): ${Array.from(sampleTruth).slice(0, 5).join(', ')}`)
+      }
+
+      // Kiểm tra format ID
+      if (samplePredictions.length > 0 && sampleTruth.size > 0) {
+        const firstPred = samplePredictions[0]
+        const firstTruth = Array.from(sampleTruth)[0]
+        logger.log(`  Sample prediction ID: "${firstPred}" (length: ${firstPred.length})`)
+        logger.log(`  Sample truth ID: "${firstTruth}" (length: ${firstTruth.length})`)
+        logger.log(`  IDs match format: ${firstPred.length === firstTruth.length}`)
+        logger.log(`  Direct match test: ${sampleTruth.has(firstPred)}`)
+      }
+
+      // Đếm số logs rỗng
+      const emptyLogs = logs.filter(l => !l.shownPostIds || l.shownPostIds.length === 0).length
+      logger.log(`  Logs rỗng (không có recommendations): ${emptyLogs}/${logs.length}`)
     }
+
+    const metrics = {
+      precisionAtK: [] as number[],
+      recallAtK: [] as number[],
+      averagePrecisionAtK: [] as number[],
+      ndcgAtK: [] as number[],
+    }
+
+    let usersWithHits = 0
+    let usersEvaluated = 0
 
     // 3. So sánh
     for (const log of logs) {
@@ -101,40 +169,54 @@ async function bootstrap() {
         continue
       }
 
-      const { p_at_k, r_at_k, ap_at_k } = calculateUserMetrics(predictions, truth, K)
+      usersEvaluated++
+
+      const { p_at_k, r_at_k, ap_at_k, ndcg_at_k } = calculateUserMetrics(predictions, truth, K)
 
       if (p_at_k !== null) {
         metrics.precisionAtK.push(p_at_k)
         metrics.recallAtK.push(r_at_k)
         metrics.averagePrecisionAtK.push(ap_at_k)
+        if (ndcg_at_k !== null) {
+          metrics.ndcgAtK.push(ndcg_at_k)
+        }
+
+        if (p_at_k > 0) {
+          usersWithHits++
+        }
       }
     }
 
     // 4. Tính trung bình
-    const numUsers = metrics.precisionAtK.length
-    if (numUsers === 0) {
+    if (usersEvaluated === 0) {
       throw new Error('Không có user nào trong log khớp với ground truth.')
     }
 
-    const mean = (arr: number[]) => arr.reduce((a, b) => a + b, 0) / arr.length
+    const mean = (arr: number[]) => (arr.length > 0 ? arr.reduce((a, b) => a + b, 0) / arr.length : 0)
 
     const meanPrecision = mean(metrics.precisionAtK)
     const meanRecall = mean(metrics.recallAtK)
     const MAP = mean(metrics.averagePrecisionAtK)
+    const meanNDCG = mean(metrics.ndcgAtK)
 
     // Thống kê thêm
-    const usersWithHits = metrics.precisionAtK.filter(p => p > 0).length
     const avgGroundTruthSize =
       groundTruthMap.size > 0 ? Array.from(groundTruthMap.values()).reduce((sum, set) => sum + set.size, 0) / groundTruthMap.size : 0
 
-    logger.log('--- 📊 KẾT QUẢ ĐÁNH GIÁ 📊 ---')
-    logger.log(`Feed được đánh giá:      ${SOURCE_TO_EVALUATE}`)
-    logger.log(`Số user được đánh giá: ${numUsers}`)
-    logger.log(`Số user có hits:        ${usersWithHits} (${((usersWithHits / numUsers) * 100).toFixed(2)}%)`)
-    logger.log(`Avg ground truth size:  ${avgGroundTruthSize.toFixed(4)}`)
-    logger.log(`Mean Precision@${K}:    ${(meanPrecision * 100).toFixed(4)}%`)
-    logger.log(`Mean Recall@${K}:       ${(meanRecall * 100).toFixed(4)}%`)
-    logger.log(`MAP@${K}:                ${(MAP * 100).toFixed(4)}%`)
+    const avgRecommendationsPerUser = logs.length > 0 ? logs.reduce((sum, log) => sum + log.shownPostIds.length, 0) / logs.length : 0
+
+    logger.log('\n--- 📊 KẾT QUẢ ĐÁNH GIÁ 📊 ---')
+    logger.log(`Feed được đánh giá:           ${SOURCE_TO_EVALUATE}`)
+    logger.log(`K (Top-K):                    ${K}`)
+    logger.log(`Số user được đánh giá:      ${usersEvaluated}`)
+    logger.log(`Số user có hits:              ${usersWithHits} (${((usersWithHits / usersEvaluated) * 100).toFixed(2)}%)`)
+    logger.log(`Avg ground truth size:        ${avgGroundTruthSize.toFixed(2)}`)
+    logger.log(`Avg recommendations/user:   ${avgRecommendationsPerUser.toFixed(2)}`)
+    logger.log('')
+    logger.log(`Mean Precision@${K}:          ${(meanPrecision * 100).toFixed(4)}%`)
+    logger.log(`Mean Recall@${K}:             ${(meanRecall * 100).toFixed(4)}%`)
+    logger.log(`MAP@${K}:                     ${(MAP * 100).toFixed(4)}%`)
+    logger.log(`Mean NDCG@${K}:                ${(meanNDCG * 100).toFixed(4)}%`)
 
     // Phân tích chi tiết hơn
     const precisionDistribution = {
@@ -143,15 +225,41 @@ async function bootstrap() {
       medium: metrics.precisionAtK.filter(p => p >= 0.1 && p < 0.3).length,
       high: metrics.precisionAtK.filter(p => p >= 0.3).length,
     }
-    logger.log(`Precision distribution:`)
-    logger.log(`  Zero:    ${precisionDistribution.zero} (${((precisionDistribution.zero / numUsers) * 100).toFixed(4)}%)`)
-    logger.log(`  Low:     ${precisionDistribution.low} (${((precisionDistribution.low / numUsers) * 100).toFixed(4)}%)`)
-    logger.log(`  Medium:  ${precisionDistribution.medium} (${((precisionDistribution.medium / numUsers) * 100).toFixed(4)}%)`)
-    logger.log(`  High:    ${precisionDistribution.high} (${((precisionDistribution.high / numUsers) * 100).toFixed(4)}%)`)
 
-    logger.log('--- Hoàn tất ---')
+    logger.log('\n--- Phân bố Precision ---')
+    logger.log(`  Zero (0%):     ${precisionDistribution.zero} (${((precisionDistribution.zero / usersEvaluated) * 100).toFixed(2)}%)`)
+    logger.log(`  Low (0-10%):    ${precisionDistribution.low} (${((precisionDistribution.low / usersEvaluated) * 100).toFixed(2)}%)`)
+    logger.log(
+      `  Medium (10-30%): ${precisionDistribution.medium} (${((precisionDistribution.medium / usersEvaluated) * 100).toFixed(2)}%)`,
+    )
+    logger.log(`  High (>30%):    ${precisionDistribution.high} (${((precisionDistribution.high / usersEvaluated) * 100).toFixed(2)}%)`)
+
+    // Phân tích theo số lượng ground truth
+    const usersByGTSize = {
+      small: 0, // 1-2 items
+      medium: 0, // 3-5 items
+      large: 0, // >5 items
+    }
+
+    for (const [userId, truthSet] of groundTruthMap.entries()) {
+      const log = logs.find(l => l.userId.toString() === userId)
+      if (!log) continue
+
+      const size = truthSet.size
+      if (size <= 2) usersByGTSize.small++
+      else if (size <= 5) usersByGTSize.medium++
+      else usersByGTSize.large++
+    }
+
+    logger.log('\n--- Phân bố Ground Truth Size ---')
+    logger.log(`  Small (1-2):    ${usersByGTSize.small}`)
+    logger.log(`  Medium (3-5):   ${usersByGTSize.medium}`)
+    logger.log(`  Large (>5):     ${usersByGTSize.large}`)
+
+    logger.log('\n--- ✅ Hoàn tất đánh giá ✅ ---')
   } catch (error) {
     logger.error('❌ ❌ ❌ Kịch bản thất bại:', error)
+    throw error
   } finally {
     await app.close()
   }

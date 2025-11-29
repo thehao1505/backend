@@ -1,5 +1,6 @@
 export const SEEDER_CONFIG = {
-  SOURCE: 'cf',
-  K: 10,
-  DATA_PATH: `./data_synthetic_144720Nov2025`,
+  SOURCE: 'cbf',
+  K: 20,
+  DATA_PATH: `./data_offline_eval`,
+  IS_EMBEDDED: true,
 }

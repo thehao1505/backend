@@ -10,6 +10,7 @@ import { Queue } from 'bullmq'
 import { NotificationPayload } from '@dtos/notification.dto'
 import { estimateDwellTimeThreshold } from '@utils/utils'
 import { Cron, CronExpression } from '@nestjs/schedule'
+import { configs } from '@utils/configs'
 
 @Injectable()
 export class PostService {
@@ -82,12 +83,17 @@ export class PostService {
     }
   }
 
+  async handleEnqueueUserForEmbedding() {
+    await this.userService.handleEnqueueUserForEmbedding()
+  }
+
   async handlePersonaEmbeddings() {
     const interactions = await this.userActivityModel
       .find({ isEmbedded: { $ne: true } })
       .select('_id')
       .lean()
 
+    console.log(interactions.length)
     if (!interactions.length) return
 
     for (const int of interactions) {
