@@ -1,4 +1,4 @@
-import { User, UserSchema } from '@entities'
+import { User, UserActivity, UserActivitySchema, UserSchema } from '@entities'
 import { forwardRef, Module } from '@nestjs/common'
 import { MongooseModule } from '@nestjs/mongoose'
 import { UserController } from './user.controller'
@@ -16,6 +16,10 @@ import { UserFollow, UserFollowSchema } from '@entities/user-follow.entity'
       {
         name: UserFollow.name,
         schema: UserFollowSchema,
+      },
+      {
+        name: UserActivity.name,
+        schema: UserActivitySchema,
       },
     ]),
     forwardRef(() => RedisModule),

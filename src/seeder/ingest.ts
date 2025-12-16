@@ -1,5 +1,5 @@
 import { NestFactory } from '@nestjs/core'
-import { AppModule } from './../app.module'
+import { AppModule } from '../app.module'
 import * as fs from 'fs'
 import * as csv from 'csv-parser'
 import { Model } from 'mongoose'
@@ -31,8 +31,55 @@ async function bootstrap() {
   const embeddingQueue = app.get<Queue>(getQueueToken('embedding'))
   const qdrantService = app.get<QdrantService>(QdrantService)
 
+  // Validate vector size configuration
+  function validateVectorSize() {
+    const vectorSize = Number(configs.vectorSize)
+    if (!configs.vectorSize || isNaN(vectorSize) || vectorSize <= 0) {
+      throw new Error(`VECTOR_SIZE phải được cấu hình và là số dương. Hiện tại: ${configs.vectorSize}. Vui lòng kiểm tra file .env`)
+    }
+    logger.log(`✅ Vector size validated: ${vectorSize} dimensions`)
+    return vectorSize
+  }
+
+  // Create collection safely (handle AlreadyExists error)
+  async function createCollectionSafely(collectionName: string, vectorSize: number) {
+    try {
+      await qdrantService.createCollection(collectionName)
+      logger.log(`✅ Đã tạo collection ${collectionName} với vector size ${vectorSize}`)
+    } catch (error) {
+      // Check if error is "AlreadyExists" (có thể xảy ra nếu QdrantService.onModuleInit đã tạo)
+      if (error.message && (error.message.includes('AlreadyExists') || error.message.includes('already exists'))) {
+        logger.warn(`Collection ${collectionName} đã tồn tại (có thể được tạo bởi QdrantService.onModuleInit), bỏ qua`)
+      } else {
+        logger.error(`Lỗi khi tạo collection ${collectionName}: ${error.message}`)
+        throw error
+      }
+    }
+  }
+
+  // Check if collection exists by trying to get it (safer approach)
+  async function collectionExists(collectionName: string): Promise<boolean> {
+    try {
+      // Try to get collections list via Qdrant client
+      // Note: This accesses private client, but it's the safest way to check existence
+      const client = (qdrantService as any).client
+      if (!client) {
+        logger.warn('Cannot access Qdrant client to check collection existence')
+        return false
+      }
+      const collections = await client.getCollections()
+      return collections.collections.some((col: any) => col.name === collectionName)
+    } catch (error) {
+      logger.warn(`Error checking collection existence for ${collectionName}: ${error.message}`)
+      return false
+    }
+  }
+
   async function clearDatabase() {
     logger.log('--- [Bước 0] Bắt đầu dọn dẹp DB ---')
+
+    // Validate vector size before proceeding
+    const vectorSize = validateVectorSize()
 
     await embeddingQueue.pause()
     logger.log('Đã tạm dừng (pause) BullMQ queue.')
@@ -43,24 +90,53 @@ async function bootstrap() {
     await recLogModel.deleteMany({})
     await userFollowModel.deleteMany({})
     await embeddingQueue.obliterate({ force: true })
+
+    // Delete Qdrant collections
     try {
-      await qdrantService.deleteCollection(configs.userCollectionName)
-      logger.log(`Đã xóa collection ${configs.userCollectionName}`)
+      const userCollectionExists = await collectionExists(configs.userCollectionName)
+      if (userCollectionExists) {
+        await qdrantService.deleteCollection(configs.userCollectionName)
+        logger.log(`Đã xóa collection ${configs.userCollectionName}`)
+      } else {
+        logger.log(`Collection ${configs.userCollectionName} không tồn tại, bỏ qua xóa`)
+      }
     } catch (e) {
       logger.warn(`Không thể xóa ${configs.userCollectionName}: ${e.message}`)
     }
 
     try {
-      await qdrantService.deleteCollection(configs.postCollectionName)
-      logger.log(`Đã xóa collection ${configs.postCollectionName}`)
+      const postCollectionExists = await collectionExists(configs.postCollectionName)
+      if (postCollectionExists) {
+        await qdrantService.deleteCollection(configs.postCollectionName)
+        logger.log(`Đã xóa collection ${configs.postCollectionName}`)
+      } else {
+        logger.log(`Collection ${configs.postCollectionName} không tồn tại, bỏ qua xóa`)
+      }
     } catch (e) {
       logger.warn(`Không thể xóa ${configs.postCollectionName}: ${e.message}`)
     }
 
-    await new Promise(resolve => setTimeout(resolve, 1000))
+    try {
+      const userShortTermCollectionExists = await collectionExists(configs.userShortTermCollectionName)
+      if (userShortTermCollectionExists) {
+        await qdrantService.deleteCollection(configs.userShortTermCollectionName)
+        logger.log(`Đã xóa collection ${configs.userShortTermCollectionName}`)
+      } else {
+        logger.log(`Collection ${configs.userShortTermCollectionName} không tồn tại, bỏ qua xóa`)
+      }
+    } catch (e) {
+      logger.warn(`Không thể xóa ${configs.userShortTermCollectionName}: ${e.message}`)
+    }
 
-    await qdrantService.createCollection(configs.userCollectionName)
-    await qdrantService.createCollection(configs.postCollectionName)
+    // Wait longer to ensure Qdrant service has time to process deletion
+    // and avoid race condition with QdrantService.onModuleInit
+    logger.log('Đang đợi Qdrant xử lý xóa collections...')
+    await new Promise(resolve => setTimeout(resolve, 2000))
+
+    // Create collections safely (check existence to avoid race condition)
+    await createCollectionSafely(configs.userCollectionName, vectorSize)
+    await createCollectionSafely(configs.postCollectionName, vectorSize)
+    await createCollectionSafely(configs.userShortTermCollectionName, vectorSize)
 
     logger.log('--- [Bước 0] Dọn dẹp DB hoàn tất ---')
   }
@@ -74,19 +150,23 @@ async function bootstrap() {
       usersToCreate.push({
         _id: row.id,
         username: row.username,
+        avatar: row.avatar,
         firstName: row.firstName,
         lastName: row.lastName,
         shortDescription: row.shortDescription,
-        email: `${row.username}@synthetic.com`,
+        // Fix: Ưu tiên email từ CSV, fallback về synthetic email
+        email: row.email || `${row.username}@synthetic.com`,
         password: 'password',
         isEmbedded: false,
         persona: row.persona ? row.persona.split('|') : [],
+        // Fix: Đọc createdAt từ CSV nếu có
+        createdAt: row.createdAt ? new Date(row.createdAt) : undefined,
       } as User)
     }
 
     await userModel.create(usersToCreate)
 
-    if (SEEDER_CONFIG.IS_EMBEDDED) {
+    if (SEEDER_CONFIG.IS_EMBEDDED === 'true') {
       for (const user of usersToCreate) {
         await embeddingQueue.add('process-profile-user-embedding', { userId: user._id })
       }
@@ -107,16 +187,22 @@ async function bootstrap() {
         author: row.authorId,
         content: row.content,
         dwellTimeThreshold: parseInt(row.dwellTimeThreshold, 10) || 3000,
-        createdAt: new Date(row.createdAt),
+        createdAt: row.createdAt,
         isEmbedded: false,
         parentId: row.parentId || null,
+        // Fix: Đọc categories từ CSV (pipe-separated)
+        categories: row.categories ? row.categories.split('|').filter((c: string) => c.trim()) : [],
+        // Fix: Đọc isReply từ CSV
+        isReply: row.isReply === 'true' || row.isReply === true || row.isReply === 'True',
+        // Set images default (không có trong CSV)
+        images: [],
       } as Post)
     }
 
     await postModel.insertMany(postsToCreate)
     logger.log(`--- [Bước 2] Đã tạo ${postsToCreate.length} Posts ---`)
 
-    if (SEEDER_CONFIG.IS_EMBEDDED) {
+    if (SEEDER_CONFIG.IS_EMBEDDED === 'true') {
       for (const post of postsToCreate) {
         await embeddingQueue.add('process-post-embedding', { postId: post._id })
       }
@@ -133,9 +219,12 @@ async function bootstrap() {
 
     for await (const row of stream) {
       followsToCreate.push({
-        _id: uuidv4(), // UserFollow dùng _id
+        // Fix: Ưu tiên ID từ CSV, fallback về uuid mới
+        _id: row.id,
         followerId: row.followerId,
         followingId: row.followingId,
+        // Fix: Đọc createdAt từ CSV nếu có
+        createdAt: row.createdAt ? new Date(row.createdAt) : undefined,
       } as UserFollow)
     }
 
@@ -169,7 +258,7 @@ async function bootstrap() {
       })
 
       // 2. Enqueue job với payload chính xác
-      if (SEEDER_CONFIG.IS_EMBEDDED) {
+      if (SEEDER_CONFIG.IS_EMBEDDED === 'true') {
         await embeddingQueue.add('process-persona-user-embedding', { activityId: newActivity._id })
       } else {
         logger.log(`--- [Bước 3] Đã tạo ${newActivity._id} UserActivity ---`)

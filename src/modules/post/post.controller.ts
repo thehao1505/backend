@@ -13,6 +13,11 @@ import { PostEmbeddingInterceptor } from 'src/interceptors/post-embedding.interc
 export class PostController {
   constructor(private readonly postService: PostService) {}
 
+  @Get('user-reply-posts')
+  async getUserReplyPosts(@Query() queryDto: QueryDto) {
+    return await this.postService.getUserReplyPosts(queryDto)
+  }
+
   @Get('embed/all-persona-user')
   async embedPersona() {
     return await this.postService.handlePersonaEmbeddings()

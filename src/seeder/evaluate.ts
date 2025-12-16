@@ -3,7 +3,7 @@ import { AppModule } from '../app.module'
 import { Model } from 'mongoose'
 import { getModelToken } from '@nestjs/mongoose'
 import { Logger } from '@nestjs/common'
-import { RecommendationLog } from '@entities'
+import { Post, RecommendationLog } from '@entities'
 import * as fs from 'fs'
 import * as csv from 'csv-parser'
 import * as path from 'path'
@@ -155,10 +155,39 @@ async function bootstrap() {
       ndcgAtK: [] as number[],
     }
 
+    // Metrics mới: Coverage, Diversity, Novelty
+    const allRecommendedPostIds = new Set<string>()
+    const allGroundTruthPostIds = new Set<string>()
+    const userCategoryDiversity: number[] = [] // Diversity score cho mỗi user
+    const userAuthorDiversity: number[] = [] // Author diversity cho mỗi user
+
     let usersWithHits = 0
     let usersEvaluated = 0
 
+    // Load post details để tính diversity (cần categories và authors)
+    const postModel = app.get<Model<Post>>(getModelToken(Post.name))
+    const allPostIds = new Set<string>()
+    logs.forEach(log => {
+      log.shownPostIds.forEach(id => allPostIds.add(id.toString()))
+    })
+    groundTruthMap.forEach(truthSet => {
+      truthSet.forEach(id => allPostIds.add(id))
+    })
+
+    const postsMap = new Map<string, any>()
+    if (allPostIds.size > 0) {
+      const posts = await postModel
+        .find({ _id: { $in: Array.from(allPostIds) } })
+        .select('categories author')
+        .lean()
+      posts.forEach(post => {
+        postsMap.set(post._id.toString(), post)
+      })
+    }
+
     // 3. So sánh
+    const zeroPrecisionUsers: Array<{ userId: string; predictions: string[]; truth: string[]; overlap: number }> = []
+
     for (const log of logs) {
       const userId = log.userId.toString()
       const predictions = log.shownPostIds.map(id => id.toString())
@@ -170,6 +199,42 @@ async function bootstrap() {
       }
 
       usersEvaluated++
+
+      // Debug: Track users với zero precision để phân tích
+      const overlap = predictions.filter(p => truth.has(p)).length
+      if (overlap === 0 && zeroPrecisionUsers.length < 5) {
+        zeroPrecisionUsers.push({
+          userId,
+          predictions: predictions.slice(0, 10),
+          truth: Array.from(truth).slice(0, 10),
+          overlap: 0,
+        })
+      }
+
+      // Tính coverage: thêm tất cả recommended posts
+      predictions.forEach(postId => allRecommendedPostIds.add(postId))
+      truth.forEach(postId => allGroundTruthPostIds.add(postId))
+
+      // Tính diversity cho user này
+      const categories = new Set<string>()
+      const authors = new Set<string>()
+      predictions.forEach(postId => {
+        const post = postsMap.get(postId)
+        if (post) {
+          if (post.categories && Array.isArray(post.categories)) {
+            post.categories.forEach((cat: string) => categories.add(cat))
+          }
+          if (post.author) {
+            authors.add(post.author.toString())
+          }
+        }
+      })
+
+      // Diversity = số unique categories / số posts (normalized)
+      const categoryDiversity = predictions.length > 0 ? categories.size / Math.min(predictions.length, 10) : 0
+      const authorDiversity = predictions.length > 0 ? authors.size / Math.min(predictions.length, 10) : 0
+      userCategoryDiversity.push(categoryDiversity)
+      userAuthorDiversity.push(authorDiversity)
 
       const { p_at_k, r_at_k, ap_at_k, ndcg_at_k } = calculateUserMetrics(predictions, truth, K)
 
@@ -218,6 +283,29 @@ async function bootstrap() {
     logger.log(`MAP@${K}:                     ${(MAP * 100).toFixed(4)}%`)
     logger.log(`Mean NDCG@${K}:                ${(meanNDCG * 100).toFixed(4)}%`)
 
+    // Tính Coverage: % posts trong ground truth được recommend ít nhất 1 lần
+    const coverage =
+      allGroundTruthPostIds.size > 0
+        ? (Array.from(allGroundTruthPostIds).filter(id => allRecommendedPostIds.has(id)).length / allGroundTruthPostIds.size) * 100
+        : 0
+
+    // Tính Catalog Coverage: % unique posts được recommend
+    const totalPostsInCatalog = allPostIds.size
+    const catalogCoverage = totalPostsInCatalog > 0 ? (allRecommendedPostIds.size / totalPostsInCatalog) * 100 : 0
+
+    // Tính Diversity: trung bình diversity scores
+    const meanCategoryDiversity = mean(userCategoryDiversity)
+    const meanAuthorDiversity = mean(userAuthorDiversity)
+    const meanDiversity = (meanCategoryDiversity + meanAuthorDiversity) / 2
+
+    logger.log('')
+    logger.log('--- 📈 METRICS MỚI 📈 ---')
+    logger.log(`Coverage (Ground Truth):      ${coverage.toFixed(4)}%`)
+    logger.log(`Catalog Coverage:              ${catalogCoverage.toFixed(4)}%`)
+    logger.log(`Mean Category Diversity:       ${(meanCategoryDiversity * 100).toFixed(4)}%`)
+    logger.log(`Mean Author Diversity:         ${(meanAuthorDiversity * 100).toFixed(4)}%`)
+    logger.log(`Mean Overall Diversity:        ${(meanDiversity * 100).toFixed(4)}%`)
+
     // Phân tích chi tiết hơn
     const precisionDistribution = {
       zero: metrics.precisionAtK.filter(p => p === 0).length,
@@ -255,6 +343,19 @@ async function bootstrap() {
     logger.log(`  Small (1-2):    ${usersByGTSize.small}`)
     logger.log(`  Medium (3-5):   ${usersByGTSize.medium}`)
     logger.log(`  Large (>5):     ${usersByGTSize.large}`)
+
+    // Debug: Hiển thị sample users với zero precision
+    if (zeroPrecisionUsers.length > 0) {
+      logger.log('\n--- 🔍 DEBUG: Sample Users với Zero Precision ---')
+      for (const user of zeroPrecisionUsers.slice(0, 3)) {
+        logger.log(`\n  User: ${user.userId}`)
+        logger.log(`    Predictions (first 5): ${user.predictions.slice(0, 5).join(', ')}`)
+        logger.log(`    Ground Truth (first 5): ${user.truth.slice(0, 5).join(', ')}`)
+        logger.log(`    Overlap: ${user.overlap}`)
+      }
+      logger.log(`\n  💡 Gợi ý: Kiểm tra xem recommendations có match với user preferences không`)
+      logger.log(`  💡 Có thể cần: Tăng candidate pool, cải thiện scoring weights, hoặc cải thiện fallback strategy`)
+    }
 
     logger.log('\n--- ✅ Hoàn tất đánh giá ✅ ---')
   } catch (error) {

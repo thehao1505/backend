@@ -1,16 +1,18 @@
 import { ConflictException, forwardRef, Inject, Injectable, Logger, NotFoundException } from '@nestjs/common'
 import { InjectModel } from '@nestjs/mongoose'
 import { Model } from 'mongoose'
-import { NotificationType, User } from '@entities'
+import { NotificationType, User, UserActivity } from '@entities'
 import { QueryDto, QuerySearchDto, UpdateUserDto } from '@dtos/user.dto'
 import { NotificationService } from '@modules/notification/notification.service'
 import { InjectQueue } from '@nestjs/bullmq'
 import { Queue } from 'bullmq'
 import { Cron, CronExpression } from '@nestjs/schedule'
 import { configs } from '@utils/configs'
-import { EmbeddingService, QdrantService } from '@modules/index-service'
+import { VectorUtil } from '@utils/utils'
+import { EmbeddingService, EmbeddingProcessor, QdrantService } from '@modules/index-service'
 import { UserFollow } from '@entities/user-follow.entity'
 import { InteractionType } from '@utils/enum'
+import { Pagination } from '@dtos/base.dto'
 
 @Injectable()
 export class UserService {
@@ -19,9 +21,11 @@ export class UserService {
   constructor(
     @InjectModel(User.name) private readonly userModel: Model<User>,
     @InjectModel(UserFollow.name) private readonly userFollowModel: Model<UserFollow>,
+    @InjectModel(UserActivity.name) private readonly userActivityModel: Model<UserActivity>,
     @InjectQueue('embedding') private readonly embeddingQueue: Queue,
     @Inject(forwardRef(() => QdrantService)) private readonly qdrantService: QdrantService,
     @Inject(forwardRef(() => EmbeddingService)) private readonly embeddingService: EmbeddingService,
+    @Inject(forwardRef(() => EmbeddingProcessor)) private readonly embeddingProcessor: EmbeddingProcessor,
     @Inject(forwardRef(() => NotificationService)) private readonly notificationService: NotificationService,
   ) {}
 
@@ -70,13 +74,32 @@ export class UserService {
     if (!updatedUser) {
       throw new NotFoundException('User not found')
     }
+
+    // DUAL VECTOR STRATEGY: Nếu persona thay đổi, refresh long-term vector
+    if (updateUserDto.persona && Array.isArray(updateUserDto.persona) && updateUserDto.persona.length > 0) {
+      this.logger.log(`Persona updated for user ${id}, refreshing long-term vector...`)
+      // Enqueue refresh job (không block response)
+      this.refreshUserLongTermVector(id).catch(error => {
+        this.logger.error(`Failed to refresh long-term vector for user ${id}: ${error.message}`)
+      })
+    }
+
     return updatedUser
   }
 
+  /**
+   * Refresh long-term vector khi persona được cập nhật
+   */
+  async refreshUserLongTermVector(userId: string) {
+    return await this.embeddingProcessor.refreshUserLongTermVector(userId)
+  }
+
   async deleteUser(id: string) {
-    return 'This function temporary deprecated'
-    // await this.userModel.findByIdAndUpdate(id, { $set: { isDeleted: true } })
-    // return 'Deleted user successfully!'
+    await this.userModel.deleteOne({ _id: id })
+    await this.qdrantService.deletePoint(configs.userCollectionName, id)
+    await this.qdrantService.deletePoint(configs.userShortTermCollectionName, id)
+
+    return 'Deleted user successfully!'
   }
 
   async followUser(followerId: string, followingId: string) {
@@ -106,6 +129,11 @@ export class UserService {
       this.userModel.updateOne({ _id: followingId }, { $inc: { followerCount: 1 } }),
     ])
 
+    await Promise.all([
+      this.userModel.updateOne({ _id: followerId }, { $addToSet: { followings: followingId } }),
+      this.userModel.updateOne({ _id: followingId }, { $addToSet: { followers: followerId } }),
+    ])
+
     return follow
   }
 
@@ -118,6 +146,11 @@ export class UserService {
     await Promise.all([
       this.userModel.updateOne({ _id: followerId }, { $inc: { followingCount: -1 } }),
       this.userModel.updateOne({ _id: followingId }, { $inc: { followerCount: -1 } }),
+    ])
+
+    await Promise.all([
+      this.userModel.updateOne({ _id: followerId }, { $pull: { followings: followingId } }),
+      this.userModel.updateOne({ _id: followingId }, { $pull: { followers: followerId } }),
     ])
 
     return { success: true }
@@ -198,7 +231,8 @@ export class UserService {
     const { text } = query
 
     const embedding = await this.embeddingService.generateEmbedding(text)
-    const similar = await this.qdrantService.searchSimilar(configs.userCollectionName, embedding, Number(limit), Number(page), {})
+    const normalizedEmbedding = VectorUtil.normalize(embedding)
+    const similar = await this.qdrantService.searchSimilar(configs.userCollectionName, normalizedEmbedding, Number(limit), Number(page), {})
 
     const similarUserIds = similar.map(item => item.id)
     const similarUsersRaw = await this.userModel
@@ -247,11 +281,13 @@ export class UserService {
   @Cron(CronExpression.EVERY_DAY_AT_MIDNIGHT)
   async syncUserFollowData() {
     try {
+      // Sync follower counts and followers array
       const followerPipeline = [
         {
           $group: {
             _id: '$followingId',
             followerCount: { $sum: 1 },
+            followers: { $push: '$followerId' },
           },
         },
         {
@@ -265,11 +301,13 @@ export class UserService {
       ]
       await this.userFollowModel.aggregate(followerPipeline as any[]).exec()
 
+      // Sync following counts and followings array
       const followingPipeline = [
         {
           $group: {
             _id: '$followerId',
             followingCount: { $sum: 1 },
+            followings: { $push: '$followingId' },
           },
         },
         {
@@ -283,12 +321,31 @@ export class UserService {
       ]
       await this.userFollowModel.aggregate(followingPipeline as any[]).exec()
 
-      await this.userModel.updateMany({ followerCount: { $exists: false } }, { $set: { followerCount: 0 } })
-      await this.userModel.updateMany({ followingCount: { $exists: false } }, { $set: { followingCount: 0 } })
+      // Set default values for users without followers/followings
+      await this.userModel.updateMany({ followerCount: { $exists: false } }, { $set: { followerCount: 0, followers: [] } })
+      await this.userModel.updateMany({ followingCount: { $exists: false } }, { $set: { followingCount: 0, followings: [] } })
+
+      // Clear arrays for users who have counts but no actual relationships
+      await this.userModel.updateMany({ followerCount: 0, followers: { $exists: true, $ne: [] } }, { $set: { followers: [] } })
+      await this.userModel.updateMany({ followingCount: 0, followings: { $exists: true, $ne: [] } }, { $set: { followings: [] } })
 
       return { success: true, message: 'Updated user follow data successfully' }
     } catch (error) {
       throw new Error(`Cant backfill: ${error.message}`)
     }
+  }
+
+  async userInteraction(userId: string, query: Pagination) {
+    const { page, limit } = query
+    const skip = (page - 1) * limit
+    const interactions = await this.userActivityModel
+      .find({ userId })
+      .populate('postId')
+      .skip(skip)
+      .sort({ createdAt: -1 })
+      .limit(limit)
+      .lean()
+    const total = await this.userActivityModel.countDocuments({ userId })
+    return { total, interactions }
   }
 }

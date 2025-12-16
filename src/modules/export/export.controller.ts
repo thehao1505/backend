@@ -1,5 +1,5 @@
 // src/export/export.controller.ts
-import { Controller, Get, Res, UseGuards } from '@nestjs/common'
+import { Controller, Get, Logger, Res, UseGuards } from '@nestjs/common'
 import { Response } from 'express' // Import Response từ express
 import { ExportService } from './export.service'
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger'
@@ -10,6 +10,7 @@ import { AuthGuard } from '@nestjs/passport'
 @UseGuards(AuthGuard('jwt'))
 @ApiTags('Export')
 export class ExportController {
+  private readonly logger = new Logger(ExportController.name)
   constructor(private readonly exportService: ExportService) {}
 
   @Get('stream/recsys-evaluation-csv')
@@ -25,7 +26,7 @@ export class ExportController {
     try {
       await this.exportService.streamEnrichedActivitiesToCsv(res)
     } catch (error) {
-      console.error(`Error streaming evaluation csv: ${error.message}`)
+      this.logger.error(`Error streaming evaluation csv: ${error.message}`)
     }
   }
 
@@ -41,7 +42,7 @@ export class ExportController {
     try {
       await this.exportService.streamEnrichedFollowsToCsv(res)
     } catch (error) {
-      console.error(`Error streaming evaluation csv: ${error.message}`)
+      this.logger.error(`Error streaming evaluation csv: ${error.message}`)
     }
   }
 
@@ -56,7 +57,7 @@ export class ExportController {
     try {
       await this.exportService.streamPostsToCsv(res)
     } catch (error) {
-      console.error(`Error streaming posts: ${error.message}`)
+      this.logger.error(`Error streaming posts: ${error.message}`)
     }
   }
 
@@ -71,7 +72,7 @@ export class ExportController {
     try {
       await this.exportService.streamUsersToCsv(res)
     } catch (error) {
-      console.error(`Error streaming users: ${error.message}`)
+      this.logger.error(`Error streaming users: ${error.message}`)
     }
   }
 }

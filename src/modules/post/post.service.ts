@@ -49,6 +49,17 @@ export class PostService {
               },
             },
           },
+          likes: {
+            $addToSet: {
+              $cond: {
+                if: {
+                  $and: [{ $eq: ['$userActivityType', UserActivityType.LIKE] }, { $eq: ['$isDeleted', false] }],
+                },
+                then: '$userId',
+                else: '$$REMOVE',
+              },
+            },
+          },
           viewCount: {
             $sum: {
               $cond: [{ $eq: ['$userActivityType', UserActivityType.POST_VIEW] }, 1, 0],
@@ -76,6 +87,9 @@ export class PostService {
       },
     ]
     try {
+      // Initialize likes field for posts that don't have it yet
+      await this.postModel.updateMany({ likes: { $exists: false } }, { $set: { likes: [] } })
+
       await this.userActivityModel.aggregate(pipeline as any[]).exec()
       return { success: true, message: 'Updated post interaction data' }
     } catch (error) {
@@ -93,7 +107,6 @@ export class PostService {
       .select('_id')
       .lean()
 
-    console.log(interactions.length)
     if (!interactions.length) return
 
     for (const int of interactions) {
@@ -139,6 +152,25 @@ export class PostService {
 
   async updatePost(id: string, updatePostDto: UpdatePostDto) {
     return await this.postModel.findByIdAndUpdate(id, updatePostDto, { new: true })
+  }
+
+  async getUserReplyPosts(queryDto: QueryDto) {
+    const { page, limit, sort, author } = queryDto
+
+    let sortObject = {}
+    if (sort) {
+      sortObject = JSON.parse(sort)
+    } else {
+      sortObject = { createdAt: -1 }
+    }
+    return await this.postModel
+      .find({ author: author, parentId: { $ne: null } })
+      .populate('parentId', 'content images author')
+      .populate('author', 'username avatar')
+      .sort({ ...sortObject })
+      .skip((page - 1) * limit)
+      .limit(limit)
+      .lean()
   }
 
   async getPosts(queryDto: QueryDto) {
@@ -217,12 +249,13 @@ export class PostService {
       },
       { upsert: true, new: true },
     )
-    await this.postModel.updateOne({ _id: postId }, { $inc: { likeCount: 1 } })
+    await this.postModel.updateOne({ _id: postId }, { $inc: { likeCount: 1 }, $addToSet: { likes: userId } })
     this.userService.enqueueUserPersonaForEmbedding(activity._id.toString())
     this.notificationService.createNotification({
       type: NotificationType.LIKE,
       recipientId: post.author,
       senderId: user._id,
+      postId,
     })
 
     return 'Liked this post successfully!'
@@ -245,7 +278,7 @@ export class PostService {
       }
 
       await this.userActivityModel.updateOne({ _id: activeLike._id }, { $set: { isDeleted: true } })
-      await this.postModel.updateOne({ _id: postId }, { $inc: { likeCount: -1 } })
+      await this.postModel.updateOne({ _id: postId }, { $inc: { likeCount: -1 }, $pull: { likes: userId } })
 
       const unlikeActivity = await this.userActivityModel.create({
         userId,

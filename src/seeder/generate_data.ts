@@ -85,6 +85,136 @@ const TOPICS = [
     templates: ['Outfit ideas cho {keyword}', 'Review {keyword} hot nhất hiện tại', 'Cách mix & match {keyword}'],
     seasonalBoost: [8, 9, 10, 11],
   },
+  {
+    id: 'gaming',
+    name: 'Gaming & Esports',
+    keywords: ['Liên Minh Huyền Thoại', 'Valorant', 'Genshin Impact', 'PS5', 'Steam', 'GTA VI', 'Game Mobile', 'Esports'],
+    templates: [
+      'Highlight {keyword} xử lý đi vào lòng đất',
+      'Phân tích bản cập nhật mới nhất của {keyword}',
+      'Drama tuyển thủ {keyword} chấn động cộng đồng',
+      'Hướng dẫn leo rank {keyword} thần tốc',
+      'Cấu hình PC để chiến mượt {keyword}',
+    ],
+    seasonalBoost: [5, 6, 7, 0, 1], // Nghỉ hè + nghỉ Tết
+  },
+  {
+    id: 'finance',
+    name: 'Tài chính & Crypto',
+    keywords: ['Bitcoin', 'Chứng khoán', 'Vàng', 'Bất động sản', 'Tiết kiệm', 'Lãi suất', 'Ethereum', 'Đầu tư'],
+    templates: [
+      'Nhận định thị trường {keyword} tuần tới: Tăng hay giảm?',
+      'Có nên bắt đáy {keyword} ngay lúc này?',
+      'Bài học xương máu khi đầu tư {keyword} cho người mới',
+      'Cách quản lý tài chính cá nhân và {keyword} hiệu quả',
+      'Biến động giá {keyword} hôm nay làm nhà đầu tư hoảng loạn',
+    ],
+    seasonalBoost: [0, 1, 10, 11], // Cuối năm/Đầu năm
+  },
+  {
+    id: 'entertainment',
+    name: 'Giải trí (Phim/Nhạc)',
+    keywords: ['Netflix', 'Phim chiếu rạp', 'K-Pop', 'BlackPink', 'Sơn Tùng MTP', 'Anime', 'Marvel', 'Conan'],
+    templates: [
+      'Review phim {keyword}: Khen chê công tâm',
+      'Giả thuyết về cái kết của {keyword} đang gây bão',
+      'MV mới của {keyword} đạt top 1 trending chỉ sau 1 giờ',
+      'Top những bộ phim về {keyword} hay nhất mọi thời đại',
+      'Reaction về màn trình diễn của {keyword}',
+    ],
+    seasonalBoost: [0, 1, 2, 5, 6, 11, 12], // Lễ tết, hè
+  },
+  {
+    id: 'pets',
+    name: 'Thú cưng',
+    keywords: ['Mèo Anh Lông Ngắn', 'Corgi', 'Husky', 'Golden', 'Poodle', 'Hamster', 'Nuôi mèo', 'Spa thú cưng'],
+    templates: [
+      'Khoảnh khắc siêu cute của {keyword} nhà mình',
+      'Bí quyết chăm sóc {keyword} không bị rụng lông',
+      'Review thức ăn cho {keyword} tốt nhất',
+      'Câu chuyện cảm động về {keyword} cứu chủ',
+      'Hài hước: Khi {keyword} phá nhà',
+    ],
+    seasonalBoost: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11], // Quanh năm
+  },
+  {
+    id: 'education',
+    name: 'Giáo dục & Kỹ năng',
+    keywords: ['IELTS', 'TOEIC', 'Tiếng Anh', 'Du học', 'Kỹ năng mềm', 'Sách hay', 'Excel', 'PowerPoint'],
+    templates: [
+      'Lộ trình tự học {keyword} từ mất gốc lên 7.0',
+      'Review trung tâm {keyword} có tâm nhất Hà Nội/TPHCM',
+      'Tổng hợp tài liệu {keyword} miễn phí cực hay',
+      'Mẹo thi {keyword} điểm cao ít người biết',
+      'Review cuốn sách về {keyword} thay đổi tư duy',
+    ],
+    seasonalBoost: [3, 4, 5, 8, 9, 11], // Mùa thi, tựu trường
+  },
+  {
+    id: 'home_decor',
+    name: 'Nhà cửa & Đời sống',
+    keywords: ['Decor phòng ngủ', 'Smarthome', 'Nghiện Nhà', 'IKEA', 'Cây cảnh', 'Sắp xếp nhà cửa', 'Cải tạo nhà', 'Robot hút bụi'],
+    templates: [
+      'F5 lại góc làm việc với ngân sách {keyword} 500k',
+      'Review {keyword}: Có thực sự tiện lợi như lời đồn?',
+      'Khoe thành quả {keyword} sau 1 tháng tự làm',
+      'Mẹo {keyword} giúp nhà cửa luôn gọn gàng',
+      'Top món đồ {keyword} không thể thiếu cho người lười',
+    ],
+    seasonalBoost: [0, 1, 11, 12], // Dọn nhà đón Tết, cuối năm
+  },
+  {
+    id: 'automotive',
+    name: 'Xe & Tốc độ',
+    keywords: ['VinFast', 'Honda SH', 'Mercedes', 'Xe độ', 'Phượt xe máy', 'Bảo dưỡng xe', 'Off-road', 'Siêu xe'],
+    templates: [
+      'Đánh giá chi tiết {keyword} phiên bản mới nhất',
+      'Kinh nghiệm lái {keyword} đường dài an toàn',
+      'So sánh {keyword} và đối thủ cùng phân khúc',
+      'Chi phí nuôi {keyword} một tháng hết bao nhiêu?',
+      'Bộ ảnh {keyword} cực ngầu tại trường đua',
+    ],
+    seasonalBoost: [0, 1, 4, 5], // Đi chơi Tết, nghỉ lễ
+  },
+  {
+    id: 'parenting',
+    name: 'Gia đình & Nuôi dạy con',
+    keywords: ['Ăn dặm', 'Mẹ bỉm sữa', 'Dạy con', 'Tâm lý trẻ', 'Hôn nhân', 'Thai giáo', 'Sức khỏe bé', 'Đồ chơi thông minh'],
+    templates: [
+      'Thực đơn {keyword} giúp bé tăng cân vù vù',
+      'Khủng hoảng tuổi lên 3 và cách xử lý {keyword}',
+      'Tâm sự chuyện {keyword}: Ai rồi cũng phải trải qua',
+      'Review các loại {keyword} tốt nhất cho trẻ sơ sinh',
+      'Góc chia sẻ: Cân bằng giữa công việc và {keyword}',
+    ],
+    seasonalBoost: [2, 3, 5, 8, 11], // Mùa hè, tựu trường, mùa đông (ốm vặt)
+  },
+  {
+    id: 'spiritual',
+    name: 'Tâm linh & Chữa lành',
+    keywords: ['Tarot', '12 Cung Hoàng Đạo', 'Thần số học', 'Chữa lành', 'Manifest', 'Tử vi', 'Thiền', 'Luật hấp dẫn'],
+    templates: [
+      'Thông điệp vũ trụ tuần mới cho {keyword}',
+      'Tụ bài Tarot: Người cũ có quay lại không? ({keyword})',
+      'Dự báo tháng này cho {keyword}: Cẩn thận tiền bạc',
+      'Cách ứng dụng {keyword} để thu hút may mắn',
+      'Podcast chữa lành: Buông bỏ những {keyword} tiêu cực',
+    ],
+    seasonalBoost: [0, 1, 6, 7], // Đầu năm (xem bói), tháng cô hồn (tháng 7 âm)
+  },
+  {
+    id: 'art_creative',
+    name: 'Nghệ thuật & Sáng tạo',
+    keywords: ['Digital Art', 'Vẽ tranh', 'Nhiếp ảnh', 'Thiết kế đồ họa', 'Handmade', 'Bullet Journal', 'UI/UX', 'Viết lách'],
+    templates: [
+      'Hướng dẫn {keyword} cơ bản cho người mới bắt đầu',
+      'Quy trình sáng tạo một tác phẩm {keyword} của mình',
+      'Top 5 công cụ hỗ trợ {keyword} miễn phí tốt nhất',
+      'Thử thách 30 ngày luyện tập {keyword}',
+      'Góc truyền cảm hứng: Những nghệ sĩ {keyword} tài năng',
+    ],
+    seasonalBoost: [5, 6, 7, 8, 9], // Mùa hè, mùa thu
+  },
 ]
 
 enum UserType {
@@ -105,28 +235,32 @@ interface UserBehavior {
 const USER_BEHAVIORS: Record<UserType, UserBehavior> = {
   [UserType.POWER]: {
     type: UserType.POWER,
-    minInteractions: 500,
-    maxInteractions: 900,
+    minInteractions: 300,
+    maxInteractions: 600,
     interestMatchRate: 0.75,
     viralClickRate: 0.3,
     eagagementRate: 0.4,
   },
   [UserType.CASUAL]: {
     type: UserType.CASUAL,
-    minInteractions: 150,
-    maxInteractions: 400,
+    minInteractions: 50,
+    maxInteractions: 150,
     interestMatchRate: 0.85,
     viralClickRate: 0.2,
     eagagementRate: 0.25,
   },
   [UserType.NEW]: {
     type: UserType.NEW,
-    minInteractions: 1,
-    maxInteractions: 100,
+    minInteractions: 10,
+    maxInteractions: 30,
     interestMatchRate: 0.5,
     viralClickRate: 0.4,
     eagagementRate: 0.15,
   },
+}
+
+function getAvatarUrl(userId: string, name: string): string {
+  return `https://i.pravatar.cc/300?u=${userId}`
 }
 
 async function bootstrap() {
@@ -143,9 +277,15 @@ async function bootstrap() {
     // ============================================
     // BƯỚC 1: CREATE USERS WITH BEHAVIOR TYPES
     // ============================================
+    const defaultPasswordHash = await bcrypt.hash('password', 12)
+    logger.log(`✅ Pre-hashed password generated`)
+
+    // ============================================
+    // BƯỚC 1: CREATE USERS WITH BEHAVIOR TYPES
+    // ============================================
     logger.log(`[Step 1] Creating ${CONFIG.NUM_USERS} users`)
 
-    const users: User[] = []
+    const users: (User & { avatar: string })[] = [] // Mở rộng kiểu User tạm thời
     const userIds: string[] = []
     const userPersonas = new Map<string, string[]>()
     const userBehaviors = new Map<string, UserBehavior>()
@@ -169,28 +309,30 @@ async function bootstrap() {
       const numInterests = randomInt(2, 3)
       const persona: string[] = []
       while (persona.length < numInterests) {
-        logger.debug(`[POWER] ${persona.length} / ${numInterests}`)
         const topic = randomChoice(TOPICS)
         if (!persona.includes(topic.id)) persona.push(topic.id)
       }
       userPersonas.set(userId, persona)
 
       const createdAt = generateDate(startDate, new Date(Date.now() - 180 * 24 * 60 * 60 * 1000))
+      const fullName = `Power User${i}`
 
       users.push({
         _id: userId,
         username: `power_user_${userIndex++}`,
         firstName: 'Power',
         lastName: `User${i}`,
-        fullName: `Power User${i}`,
+        fullName: fullName,
         email: `power_user_${i}@eval.com`,
+        password: defaultPasswordHash, // Use pre-hashed
         shortDescription: `Yêu thích ${persona.map(p => TOPICS.find(t => t.id === p)?.name).join(', ')}`,
         isEmbedded: false,
         followerCount: 0,
         followingCount: 0,
         persona,
+        avatar: getAvatarUrl(userId, fullName), // Add avatar
         createdAt,
-      } as User)
+      } as any)
     }
 
     for (let i = 0; i < numCasualUsers; i++) {
@@ -201,29 +343,30 @@ async function bootstrap() {
       const numInterests = randomInt(1, 2)
       const persona: string[] = []
       while (persona.length < numInterests) {
-        logger.debug(`[CASUAL] ${persona.length} / ${numInterests}`)
         const topic = randomChoice(TOPICS)
         if (!persona.includes(topic.id)) persona.push(topic.id)
       }
       userPersonas.set(userId, persona)
 
       const createdAt = generateDate(startDate, new Date(Date.now() - 90 * 24 * 60 * 60 * 1000))
+      const fullName = `Casual User${i}`
 
       users.push({
         _id: userId,
         username: `casual_user_${userIndex++}`,
         firstName: 'Casual',
         lastName: `User${i}`,
-        fullName: `Casual User${i}`,
+        fullName: fullName,
         email: `casual_user_${i}@eval.com`,
-        password: await bcrypt.hash('password', 12),
+        password: defaultPasswordHash, // Use pre-hashed
         shortDescription: `Quan tâm đến ${persona.map(p => TOPICS.find(t => t.id === p)?.name).join(', ')}`,
         isEmbedded: false,
         followerCount: 0,
         followingCount: 0,
         persona,
+        avatar: getAvatarUrl(userId, fullName),
         createdAt,
-      } as User)
+      } as any)
     }
 
     for (let i = 0; i < numNewUsers; i++) {
@@ -234,22 +377,24 @@ async function bootstrap() {
       const persona: string[] = [randomChoice(TOPICS).id]
       userPersonas.set(userId, persona)
       const createdAt = generateDate(startDate, new Date(Date.now() - 30 * 24 * 60 * 60 * 1000))
+      const fullName = `New User${i}`
 
       users.push({
         _id: userId,
         username: `new_user_${userIndex++}`,
         firstName: 'New',
         lastName: `User${i}`,
-        fullName: `New User${i}`,
+        fullName: fullName,
         email: `new_user_${i}@eval.com`,
-        password: await bcrypt.hash('password', 12),
+        password: defaultPasswordHash, // Use pre-hashed
         shortDescription: persona.length > 0 ? `Mới tìm hiểu về ${TOPICS.find(t => t.id === persona[0])?.name}` : 'Người dùng mới',
         isEmbedded: false,
         followerCount: 0,
         followingCount: 0,
         persona,
+        avatar: getAvatarUrl(userId, fullName),
         createdAt,
-      } as User)
+      } as any)
     }
 
     logger.log(`✅ Created ${users.length} users`)
@@ -389,7 +534,6 @@ async function bootstrap() {
       let numUserInteractions = 0
 
       while (numUserInteractions < numInteractions) {
-        logger.debug(`[USER] ${userId} - ${numUserInteractions} / ${numInteractions}`)
         let targetPostId: string | undefined
         let isPreferredTopic = false
 
@@ -539,6 +683,7 @@ async function bootstrap() {
           } as Post)
         }
       }
+      logger.debug(`[USER] ${userId} has ${numUserInteractions} interactions`)
     }
 
     logger.log(`✅ Created ${allInteractions.length} interactions`)
@@ -584,12 +729,13 @@ async function bootstrap() {
     logger.log(`[Step 6] Export data to CSV files`)
 
     // Export Users CSV
-    const usersCsv = ['id,username,firstName,lastName,fullName,email,shortDescription,persona,createdAt']
+    const usersCsv = ['id,username,avatar,firstName,lastName,fullName,email,shortDescription,persona,createdAt']
     users.forEach(user => {
       usersCsv.push(
         [
           user._id,
           user.username || '',
+          user.avatar || '',
           user.firstName || '',
           user.lastName || '',
           (user as any).fullName || '',

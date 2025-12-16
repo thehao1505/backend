@@ -24,4 +24,19 @@ export class VectorUtil {
   static weightedAdd(v1: number[], v2: number[], weight: number): number[] {
     return v1.map((val, i) => val + v2[i] * weight)
   }
+
+  // Exponential Moving Average (EMA)
+  // V_new = alpha * V_new_signal + (1 - alpha) * V_old
+  // alpha ∈ [0, 1]:
+  //   - alpha = 1: Quên hoàn toàn quá khứ (chỉ giữ signal mới)
+  //   - alpha = 0: Không học gì mới (giữ nguyên vector cũ)
+  //   - alpha = 0.3: Cân bằng (30% mới, 70% cũ)
+  static exponentialMovingAverage(oldVector: number[], newSignal: number[], alpha: number): number[] {
+    if (oldVector.length !== newSignal.length) {
+      throw new Error('Vector dimensions must match')
+    }
+
+    // V_new = alpha * V_signal + (1-alpha) * V_old
+    return oldVector.map((oldVal, i) => alpha * newSignal[i] + (1 - alpha) * oldVal)
+  }
 }

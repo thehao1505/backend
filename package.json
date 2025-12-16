@@ -19,12 +19,13 @@
     "test:debug": "node --inspect-brk -r tsconfig-paths/register -r ts-node/register node_modules/.bin/jest --runInBand",
     "test:e2e": "jest --config ./test/jest-e2e.json",
     "oe:gen-data": "npx ts-node -r tsconfig-paths/register src/seeder/generate_data.ts",
-    "oe:gen-offline-eval": "npx ts-node -r tsconfig-paths/register src/seeder/generate_offline_eval_data.ts",
-    "oe:gen-p-law-offline-eval": "npx ts-node -r tsconfig-paths/register src/seeder/p_law_offline_eval_data.ts",
-    "oe:debug-data": "npx ts-node -r tsconfig-paths/register src/seeder/debug_data.ts",
     "oe:ingest": "npx ts-node -r tsconfig-paths/register src/seeder/ingest.ts",
+    "oe:seed": "npm run oe:gen-data && npm run oe:ingest",
     "oe:predict": "npx ts-node -r tsconfig-paths/register src/seeder/predict.ts",
-    "oe:evaluate": "npx ts-node -r tsconfig-paths/register src/seeder/evaluate.ts"
+    "oe:evaluate": "npx ts-node -r tsconfig-paths/register src/seeder/evaluate.ts",
+    "worker": "npx ts-node -r tsconfig-paths/register src/worker.ts",
+    "worker:dev": "npx ts-node -r tsconfig-paths/register src/worker.ts",
+    "worker:prod": "node dist/worker"
   },
   "dependencies": {
     "@google/generative-ai": "^0.24.0",
@@ -41,7 +42,6 @@
     "@nestjs/schedule": "^6.0.0",
     "@nestjs/swagger": "^8.1.1",
     "@nestjs/websockets": "^10.4.15",
-    "@pinecone-database/pinecone": "^5.1.2",
     "@qdrant/js-client-rest": "^1.14.0",
     "@types/multer": "^1.4.12",
     "bcryptjs": "^3.0.2",

@@ -22,22 +22,19 @@ export class RecommendationController {
     return this.recommendationService.enqueuePostForEmbedding(postId)
   }
 
-  @Get('hybrid/:userId')
-  async getFeed(@Req() req: Request, @Param('userId') userId: string, @Query() query: QueryRecommendationDto) {
-    return this.recommendationService.getHybridRecommendations(userId, query) // For evaluation purposes
-    // return this.recommendationService.getHybridRecommendations(req.user['_id'], query) // For production purposes
+  @Get('hybrid')
+  async getFeed(@Req() req: Request, @Query() query: QueryRecommendationDto) {
+    return this.recommendationService.getHybridRecommendations(req.user['_id'], query)
   }
 
-  @Get('cbf/:userId')
-  async getRecSysCbf(@Req() req: Request, @Param('userId') userId: string, @Query() query: QueryRecommendationDto) {
-    return this.recommendationService.getRecommendations_CBF(userId, query) // For evaluation purposes
-    // return this.recommendationService.getRecommendations_CBF(req.user['_id'], query) // For production purposes
+  @Get('cbf')
+  async getRecSysCbf(@Req() req: Request, @Query() query: QueryRecommendationDto) {
+    return this.recommendationService.getRecommendations_CBF(req.user['_id'], query)
   }
 
-  @Get('cf/:userId')
-  async getRecSysCf(@Req() req: Request, @Param('userId') userId: string, @Query() query: QueryRecommendationDto) {
-    return this.recommendationService.getRecommendations_CF(userId, query) // For evaluation purposes
-    // return this.recommendationService.getRecommendations_CF(req.user['_id'], query) // For production purposes
+  @Get('cf')
+  async getRecSysCf(@Req() req: Request, @Query() query: QueryRecommendationDto) {
+    return this.recommendationService.getRecommendations_CF(req.user['_id'], query)
   }
 
   @Get('following')

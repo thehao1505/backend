@@ -1,5 +1,6 @@
 import { RecommendationService } from '@modules/index-service'
 import { forwardRef, Module } from '@nestjs/common'
+import { BullModule } from '@nestjs/bullmq'
 import { RecommendationController } from './recommendation.controller'
 import {
   User,
@@ -15,6 +16,10 @@ import {
 } from '@entities/index'
 import { MongooseModule } from '@nestjs/mongoose'
 import { PostModule, QdrantModule, RedisModule } from '@modules/index'
+import { RecommendationCommonService } from './recommendation-common.service'
+import { RecommendationCbfService } from './recommendation-cbf.service'
+import { RecommendationCfService } from './recommendation-cf.service'
+import { RecommendationHybridService } from './recommendation-hybrid.service'
 
 @Module({
   imports: [
@@ -28,8 +33,17 @@ import { PostModule, QdrantModule, RedisModule } from '@modules/index'
     forwardRef(() => QdrantModule),
     forwardRef(() => RedisModule),
     forwardRef(() => PostModule),
+    BullModule.registerQueue({
+      name: 'embedding',
+    }),
   ],
-  providers: [RecommendationService],
+  providers: [
+    RecommendationCommonService,
+    RecommendationCbfService,
+    RecommendationCfService,
+    RecommendationHybridService,
+    RecommendationService,
+  ],
   exports: [RecommendationService],
   controllers: [RecommendationController],
 })

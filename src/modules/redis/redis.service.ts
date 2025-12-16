@@ -1,9 +1,10 @@
-import { Injectable, OnModuleInit } from '@nestjs/common'
+import { Injectable, Logger, OnModuleInit } from '@nestjs/common'
 import { configs } from '@utils/configs/config'
 import * as Redis from 'ioredis'
 
 @Injectable()
 export class RedisService implements OnModuleInit {
+  private readonly logger = new Logger(RedisService.name)
   private readonly redisClient: Redis.Redis
 
   constructor() {
@@ -18,9 +19,9 @@ export class RedisService implements OnModuleInit {
   async onModuleInit() {
     try {
       await this.redisClient.ping()
-      console.log('Connected to Redis')
+      this.logger.log('Connected to Redis')
     } catch (error) {
-      console.error('Error connecting to Redis:', error)
+      this.logger.error('Error connecting to Redis:', error)
     }
   }
 

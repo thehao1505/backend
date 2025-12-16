@@ -15,41 +15,9 @@ export class QdrantService implements OnModuleInit {
     await this.initializeCollection()
   }
 
-  // async createCollection(collectionName: string) {
-  //   try {
-  //     this.logger.log(`Đang kiểm tra và tạo collection: ${collectionName}`)
-
-  //     const exists = await this.client.collectionExists(collectionName)
-  //     if (exists) {
-  //       this.logger.log(`Collection ${collectionName} đã tồn tại. Bỏ qua.`)
-  //       return
-  //     }
-
-  //     const VECTOR_DIMENSIONS = 768
-
-  //     await this.client.createCollection(collectionName, {
-  //       vectors: {
-  //         size: VECTOR_DIMENSIONS,
-  //         distance: 'Cosine',
-  //       },
-  //     })
-  //     this.logger.log(`Đã tạo collection ${collectionName} thành công.`)
-  //   } catch (error) {
-  //     this.logger.error(`Không thể tạo collection ${collectionName}: ${error.message}`)
-  //     throw error
-  //   }
-  // }
-
   async createCollection(collectionName: string) {
     try {
       this.logger.log(`Đang tạo collection: ${collectionName}`)
-
-      // [XÓA BỎ]
-      // const exists = await this.client.collectionExists(collectionName)
-      // if (exists) {
-      //   this.logger.log(`Collection ${collectionName} đã tồn tại. Bỏ qua.`)
-      //   return
-      // }
 
       const VECTOR_DIMENSIONS = 768
 
@@ -94,6 +62,9 @@ export class QdrantService implements OnModuleInit {
       const collections = await this.client.getCollections()
       const postCollectionExists = collections.collections.some(collection => collection.name === configs.postCollectionName)
       const userCollectionExists = collections.collections.some(collection => collection.name === configs.userCollectionName)
+      const userShortTermCollectionExists = collections.collections.some(
+        collection => collection.name === `${configs.userShortTermCollectionName}`,
+      )
 
       if (!postCollectionExists) {
         await this.client.createCollection(configs.postCollectionName, {
@@ -117,6 +88,18 @@ export class QdrantService implements OnModuleInit {
         this.logger.log(`Collection ${configs.userCollectionName} created`)
       } else {
         this.logger.log(`Collection ${configs.userCollectionName} already exists`)
+      }
+
+      if (!userShortTermCollectionExists) {
+        await this.client.createCollection(configs.userShortTermCollectionName, {
+          vectors: {
+            size: Number(configs.vectorSize),
+            distance: 'Cosine',
+          },
+        })
+        this.logger.log(`Collection ${configs.userShortTermCollectionName} created`)
+      } else {
+        this.logger.log(`Collection ${configs.userShortTermCollectionName} already exists`)
       }
     } catch (error) {
       this.logger.error(`Failed to initialize Qdrant collection: ${error.message}`)
@@ -156,7 +139,6 @@ export class QdrantService implements OnModuleInit {
   }
 
   async getVectorById(collectionName: string, id: string) {
-    this.logger.log(`Retrieving vector for id ${id} from ${collectionName}`)
     try {
       const results = await this.client.retrieve(collectionName, {
         ids: [id],
@@ -173,5 +155,11 @@ export class QdrantService implements OnModuleInit {
       this.logger.error(`Error retrieving vector ${id} from ${collectionName}: ${error.message}`)
       throw error
     }
+  }
+
+  async deletePoint(collectionName: string, id: string) {
+    return this.client.delete(collectionName, {
+      points: [id],
+    })
   }
 }

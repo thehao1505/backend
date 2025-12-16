@@ -1,6 +1,6 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger'
 import { Type } from 'class-transformer'
-import { IsInt, IsNotEmpty, IsOptional, IsString, Min } from 'class-validator'
+import { IsArray, IsInt, IsNotEmpty, IsOptional, IsString, Min } from 'class-validator'
 import { Pagination } from './base.dto'
 
 export class QueryDto {
@@ -65,6 +65,14 @@ export class UpdateUserDto {
   @IsNotEmpty()
   @IsString()
   avatar: string
+
+  @ApiPropertyOptional({
+    example: ['tech', 'travel', 'food'],
+  })
+  @IsOptional()
+  @IsNotEmpty()
+  @IsArray()
+  persona: string[]
 }
 
 export class QuerySearchDto extends Pagination {

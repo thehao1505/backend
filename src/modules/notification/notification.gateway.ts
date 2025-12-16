@@ -1,5 +1,6 @@
 /* eslint-disable @typescript-eslint/no-unused-vars */
 import { NotificationDocument } from '@entities/index'
+import { Logger } from '@nestjs/common'
 import { JwtService } from '@nestjs/jwt'
 import { OnGatewayConnection, OnGatewayDisconnect, WebSocketGateway, WebSocketServer, WsException } from '@nestjs/websockets'
 import { configs } from '@utils/configs'
@@ -9,6 +10,7 @@ import { Server, Socket } from 'socket.io'
   cors: { origin: '*' },
 })
 export class NotificationGateway implements OnGatewayConnection, OnGatewayDisconnect {
+  private readonly logger = new Logger(NotificationGateway.name)
   @WebSocketServer() server: Server
 
   private users: Map<string, string> = new Map()
@@ -24,7 +26,7 @@ export class NotificationGateway implements OnGatewayConnection, OnGatewayDiscon
         client.join(`user:${userId}`)
       }
     } catch (error) {
-      console.log(`❌ Connection rejected: ${error.message}`)
+      this.logger.error(`❌ Connection rejected: ${error.message}`)
       client.disconnect()
     }
   }
@@ -37,7 +39,7 @@ export class NotificationGateway implements OnGatewayConnection, OnGatewayDiscon
   }
 
   sendToUser(userId: string, notification: NotificationDocument) {
-    console.log(`Sending notification to user: ${userId}`)
+    this.logger.log(`Sending notification to user: ${userId}`)
     this.server.to(`user:${userId}`).emit('new-notification', notification)
   }
 
@@ -56,7 +58,7 @@ export class NotificationGateway implements OnGatewayConnection, OnGatewayDiscon
       client.data.userId = payload._id
       return payload._id
     } catch (err) {
-      console.log(err.message)
+      this.logger.error(err.message)
       throw new WsException('Unauthorized: Invalid token')
     }
   }

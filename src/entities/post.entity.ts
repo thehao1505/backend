@@ -36,6 +36,9 @@ export class Post extends BaseEntity {
   @Prop({ type: Boolean, default: false })
   isReply: boolean
 
+  @Prop({ type: [String], default: [] })
+  likes: string[]
+
   @Prop({ type: Number, default: 0 })
   dwellTimeThreshold: number
 

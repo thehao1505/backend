@@ -67,6 +67,12 @@ export class User extends BaseEntity {
 
   @Prop({ type: [String], default: [] })
   persona: string[]
+
+  @Prop({ type: [String], default: [] })
+  followings: string[]
+
+  @Prop({ type: [String], default: [] })
+  followers: string[]
 }
 export const UserSchema = SchemaFactory.createForClass(User)
 export type UserDocument = User & Document

@@ -4,7 +4,8 @@ import { Model } from 'mongoose'
 import { getModelToken } from '@nestjs/mongoose'
 import { Logger } from '@nestjs/common'
 import { User, RecommendationLog } from '@entities'
-import { RecommendationService } from '@modules/recommendation/recommendation.service'
+import { RecommendationService, QdrantService } from '@modules/index-service'
+import { configs } from '@utils/configs/config'
 import { SEEDER_CONFIG } from './config'
 import * as fs from 'fs'
 import * as csv from 'csv-parser'
@@ -42,8 +43,26 @@ async function bootstrap() {
   const userModel = app.get<Model<User>>(getModelToken(User.name))
   const recLogModel = app.get<Model<RecommendationLog>>(getModelToken(RecommendationLog.name))
   const recommendationService = app.get<RecommendationService>(RecommendationService)
+  const qdrantService = app.get<QdrantService>(QdrantService)
 
   logger.log(`=== Bắt đầu dự đoán (Predict) Top ${K} cho feed '${SOURCE}' ===`)
+
+  // Helper function to check if user has vectors
+  async function userHasVectors(userId: string): Promise<boolean> {
+    try {
+      // Check for long-term vector (userId) or short-term vector (userId_shortterm)
+      await qdrantService.getVectorById(configs.userCollectionName, userId)
+      return true
+    } catch (error) {
+      // Try short-term vector
+      try {
+        await qdrantService.getVectorById(configs.userCollectionName, `${userId}_shortterm`)
+        return true
+      } catch {
+        return false
+      }
+    }
+  }
 
   try {
     // Load danh sách users cần đánh giá (chỉ users có trong test set)
@@ -66,10 +85,21 @@ async function bootstrap() {
     let processed = 0
     let errors = 0
     let emptyRecommendations = 0
+    let skippedNoVectors = 0
 
     // Dự đoán cho từng user
     for (const user of allUsers) {
       const userId = user._id.toString()
+
+      // Check if user has vectors before predicting
+      const hasVectors = await userHasVectors(userId)
+      if (!hasVectors) {
+        skippedNoVectors++
+        if (skippedNoVectors <= 5) {
+          logger.warn(`[WARN] User ${userId}: Không có vectors trong Qdrant, bỏ qua (cold-start user)`)
+        }
+        continue
+      }
 
       try {
         // Gọi recommendation service tùy theo SOURCE
@@ -109,14 +139,14 @@ async function bootstrap() {
         }
 
         processed++
-
-        if (processed % 50 === 0) {
-          logger.log(`Đã xử lý ${processed}/${allUsers.length} users... (Empty: ${emptyRecommendations})`)
-        }
       } catch (error) {
         errors++
         logger.warn(`Lỗi khi dự đoán cho user ${userId}: ${error.message}`)
         // Tiếp tục với user tiếp theo
+      }
+
+      if (processed % 50 === 0) {
+        logger.log(`Đã xử lý ${processed}/${allUsers.length} users... (Empty: ${emptyRecommendations}, Skipped: ${skippedNoVectors})`)
       }
     }
 
@@ -130,6 +160,7 @@ async function bootstrap() {
 
     logger.log(`\n📊 Thống kê:`)
     logger.log(`  - Users đã xử lý: ${processed}`)
+    logger.log(`  - Users bỏ qua (không có vectors): ${skippedNoVectors}`)
     logger.log(`  - Lỗi: ${errors}`)
     logger.log(`  - Logs đã tạo: ${logCount}`)
     logger.log(`  - Logs có recommendations: ${logsWithItems}`)

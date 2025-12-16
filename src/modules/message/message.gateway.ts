@@ -19,6 +19,7 @@ import { configs } from '@utils/configs'
   },
 })
 export class MessageGateway implements OnGatewayConnection, OnGatewayDisconnect {
+  private readonly logger = new Logger(MessageGateway.name)
   @WebSocketServer()
   server: Server
 
@@ -43,7 +44,7 @@ export class MessageGateway implements OnGatewayConnection, OnGatewayDisconnect 
 
       this.users.set(userId, client.id)
     } catch (error) {
-      console.log(`❌ Connection rejected: ${error.message}`)
+      this.logger.error(`❌ Connection rejected: ${error.message}`)
       client.disconnect()
     }
   }
@@ -97,7 +98,7 @@ export class MessageGateway implements OnGatewayConnection, OnGatewayDisconnect 
       client.data.userId = payload._id
       return payload._id
     } catch (err) {
-      console.log(err.message)
+      this.logger.error(err.message)
       throw new WsException('Unauthorized: Invalid token')
     }
   }

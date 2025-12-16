@@ -59,12 +59,6 @@ export class RegisterDto {
   })
   @IsString()
   password: string
-
-  @ApiProperty({
-    example: ['tech', 'travel', 'food'],
-  })
-  @IsArray()
-  persona: string[]
 }
 
 export class ForgotPasswordDto {
