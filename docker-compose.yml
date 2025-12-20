@@ -58,7 +58,3 @@ volumes:
     driver: local
   qdrant_storage:
     driver: local
-
-networks:
-  mongodb_network:
-    driver: bridge
