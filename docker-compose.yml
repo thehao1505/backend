@@ -24,9 +24,10 @@ services:
     container_name: backend_service
     depends_on:
       - redis
-    # restart: always
-    restart: 'no'
-    command: ['sh', '-c', 'sleep 3600']
+    restart: always
+    # for debug
+    # restart: 'no'
+    # command: ['sh', '-c', 'sleep 3600']
     env_file:
       - .env
     ports:
