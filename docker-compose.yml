@@ -48,8 +48,6 @@ services:
     volumes:
       - mongodb_data:/data/db
       - mongodb_config:/data/configdb
-    networks:
-      - mongodb_network
 
 volumes:
   mongodb_data:
