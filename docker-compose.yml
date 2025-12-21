@@ -17,6 +17,20 @@ services:
       QDRANT_API_KEY: my-secret-key-for-qdrant
     restart: unless-stopped
 
+  mongodb:
+    image: mongo:latest
+    container_name: mongodb
+    restart: always
+    ports:
+      - '27017:27017'
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_USERNAME}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_PASSWORD}
+      MONGO_INITDB_DATABASE: SA
+    volumes:
+      - mongodb_data:/data/db
+      - mongodb_config:/data/configdb
+
   app:
     build:
       context: .
@@ -24,6 +38,7 @@ services:
     container_name: backend_service
     depends_on:
       - redis
+      - mongodb
     restart: always
     # for debug
     # restart: 'no'
@@ -34,20 +49,6 @@ services:
       - '12345:3000'
     environment:
       - NODE_ENV=production
-
-  mongodb:
-    image: mongo:latest
-    container_name: mongodb
-    restart: always
-    ports:
-      - '27017:27017'
-    environment:
-      MONGO_INITDB_ROOT_USERNAME: admin
-      MONGO_INITDB_ROOT_PASSWORD: haongthe
-      MONGO_INITDB_DATABASE: SA
-    volumes:
-      - mongodb_data:/data/db
-      - mongodb_config:/data/configdb
 
 volumes:
   mongodb_data:
