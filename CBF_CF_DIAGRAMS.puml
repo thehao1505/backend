@@ -1,0 +1,659 @@
+@startuml CBF_Process_Flow
+!theme plain
+skinparam backgroundColor #FFFFFF
+skinparam activity {
+    BackgroundColor #E3F2FD
+    BorderColor #1976D2
+    FontSize 14
+}
+skinparam note {
+    BackgroundColor #FFF9C4
+    BorderColor #F57F17
+}
+
+title Content-Based Filtering (CBF) - Process Flow
+
+start
+
+:Collect User Signals;
+
+partition "User Signals Collection" {
+    :Get Long-term Vector\n(from Persona);
+    :Get Short-term Vector\n(last 30 days);
+    :Build Recent Interactions Profile\n(50 interactions, weighted);
+    :Calculate Category Preferences\n(analyze categories);
+    :Calculate Author Preferences\n(analyze authors);
+}
+
+:Check Cold Start?;
+
+if (Have enough signals?) then (Yes)
+    :Vector Similarity Search\n(Qdrant, top 800 candidates);
+else (No)
+    :Extended Profile (90 days)\nor Fallback to Popular;
+    stop
+endif
+
+partition "Multi-Signal Scoring" {
+    :Calculate Vector Score (40%)\nDual Vector: Long-term + Short-term;
+    :Calculate Recent Score (30%)\nCosine similarity;
+    :Calculate Category Score (20%);
+    :Calculate Author Score (10%);
+    :Calculate Time Decay (10%);
+    :Apply Bonuses\n(Recency, Category, Author);
+    :Calculate Final Score;
+}
+
+:Sort by Final Score;
+
+:Apply Diversity Filter\n(Top 10: 3/author, 4/category\nRemaining: 4/author, 6/category);
+
+:Cache to Redis (TTL: 30 minutes);
+
+:Return Recommendations;
+
+stop
+
+@enduml
+
+@startuml CBF_Scoring_Formula
+!theme plain
+skinparam backgroundColor #FFFFFF
+skinparam rectangle {
+    BackgroundColor #E1F5FE
+    BorderColor #01579B
+}
+
+title CBF - Multi-Signal Scoring Formula
+
+rectangle "Final Score Calculation" as Final {
+    rectangle "Vector Score (40%)" as VS #BBDEFB {
+        note right
+            **Dual Vector Strategy:**
+            - Long-term: 45% weight
+            - Short-term: 35% weight
+            - Formula: 
+              cosine(longTerm, post) × 0.45 +
+              cosine(shortTerm, post) × 0.35
+        end note
+    }
+    
+    rectangle "Recent Score (30%)" as RS #C8E6C9 {
+        note right
+            Cosine similarity with
+            Recent Interactions Profile
+        end note
+    }
+    
+    rectangle "Category Score (20%)" as CS #FFF9C4 {
+        note right
+            Average of category
+            preferences
+        end note
+    }
+    
+    rectangle "Author Score (10%)" as AS #FFCCBC {
+        note right
+            Author preference
+            value (0-1)
+        end note
+    }
+    
+    rectangle "Time Decay (10%)" as TD #F3E5F5 {
+        note right
+            exp(-hoursDiff / (21 × 24))
+            Half-life: 21 days
+        end note
+    }
+    
+    rectangle "Bonuses" as BONUS #FFE0B2 {
+        note right
+            • Recency: +0.1 (<24h), +0.05 (<7d)
+            • Category Boost: +score×0.15 (if >0.3)
+            • Author Boost: +score×0.1 (if >0.3)
+        end note
+    }
+}
+
+VS --> Final : × 0.40
+RS --> Final : × 0.30
+CS --> Final : × 0.20
+AS --> Final : × 0.10
+TD --> Final : × 0.10
+BONUS --> Final : +
+
+@enduml
+
+@startuml CF_Process_Flow
+!theme plain
+skinparam backgroundColor #FFFFFF
+skinparam activity {
+    BackgroundColor #F1F8E9
+    BorderColor #558B2F
+    FontSize 14
+}
+
+title Collaborative Filtering (CF) - Process Flow
+
+start
+
+:Collect High Intent Interactions\n(last 30 days);
+
+partition "Find Similar Users" {
+    :Calculate Weighted Sum\nfor current User;
+    :Find Users with interactions\non same posts;
+    :Calculate Weighted Intersection;
+    :Calculate Weighted Union;
+    :Calculate Similarity\n= Intersection / Union;
+    :Filter: similarity > 0.03\nand min 2 overlaps;
+    :Select Top 50 Similar Users;
+}
+
+if (Have similar users?) then (Yes)
+    :Get Candidate Posts\n(from similar users, 500 candidates);
+else (No)
+    stop
+endif
+
+partition "Multi-Signal Scoring" {
+    :Calculate Similarity Score (45%)\nWeighted average (sim²);
+    :Calculate Quality Score (30%)\nInteraction × Recency × Similarity;
+    :Calculate Recency Score (15%)\nRecency decay × Similarity;
+    :Calculate Popularity Score (10%)\nLog scale (unique users);
+    :Calculate Time Decay (10%)\nExponential decay;
+    :Apply Recency Bonus;
+    :Calculate Final Score;
+}
+
+:Sort by Final Score;
+
+:Apply Diversity Filter;
+
+:Cache to Redis (TTL: 30 minutes);
+
+:Return Recommendations;
+
+stop
+
+@enduml
+
+@startuml CF_Weighted_Jaccard_Example
+!theme plain
+skinparam backgroundColor #FFFFFF
+skinparam rectangle {
+    BackgroundColor #E8F5E9
+    BorderColor #2E7D32
+}
+
+title CF - Weighted Jaccard Similarity (Example)
+
+rectangle "User A" as UserA #C8E6C9 {
+    rectangle "Like P1\n(7 days ago)" as A1 {
+        note right
+            Weight:
+            0.2 × 1.0 = 0.2
+        end note
+    }
+    rectangle "Share P2\n(3 days ago)" as A2 {
+        note right
+            Weight:
+            0.35 × 1.0 = 0.35
+        end note
+    }
+}
+
+rectangle "User B" as UserB #C8E6C9 {
+    rectangle "Like P1\n(5 days ago)" as B1 {
+        note right
+            Weight:
+            0.2 × 1.0 = 0.2
+        end note
+    }
+    rectangle "Click P3\n(10 days ago)" as B2 {
+        note right
+            Weight:
+            0.1 × 0.8 = 0.08
+        end note
+    }
+}
+
+A1 .[#FF6F00].> B1 : Overlap (P1)
+
+rectangle "Calculation" as Calc #FFF3E0 {
+    rectangle "Weighted Intersection" as Intersect {
+        note right
+            min(0.2, 0.2) = 0.2
+            (only P1 overlaps)
+        end note
+    }
+    
+    rectangle "Weighted Union" as Union {
+        note right
+            User A sum: 0.2 + 0.35 = 0.55
+            User B sum: 0.2 + 0.08 = 0.28
+            Union = 0.55 + 0.28 - 0.2 = 0.63
+            (subtract intersection to avoid double counting)
+        end note
+    }
+    
+    rectangle "Similarity" as Sim #FFE082 {
+        note right
+            Similarity = 0.2 / 0.63
+            = 0.317 (31.7%)
+        end note
+    }
+}
+
+Intersect --> Sim
+Union --> Sim
+
+@enduml
+
+@startuml CF_Scoring_Formula
+!theme plain
+skinparam backgroundColor #FFFFFF
+skinparam rectangle {
+    BackgroundColor #E8F5E9
+    BorderColor #2E7D32
+}
+
+title CF - Multi-Signal Scoring Formula
+
+rectangle "Final Score Calculation" as Final {
+    rectangle "Similarity Score (45%)" as SimScore #C8E6C9 {
+        note right
+            Weighted average:
+            Σ(sim²) / Σ(sim)
+            (Users with high similarity
+            are prioritized)
+        end note
+    }
+    
+    rectangle "Quality Score (30%)" as QualScore #A5D6A7 {
+        note right
+            Interaction weight ×
+            Recency weight ×
+            User similarity
+        end note
+    }
+    
+    rectangle "Recency Score (15%)" as RecScore #81C784 {
+        note right
+            Recency decay ×
+            User similarity
+        end note
+    }
+    
+    rectangle "Popularity Score (10%)" as PopScore #66BB6A {
+        note right
+            log(1 + unique users) /
+            log(1 + total users)
+            (Log scale)
+        end note
+    }
+    
+    rectangle "Time Decay (10%)" as TimeDecay #4CAF50 {
+        note right
+            exp(-hoursDiff / (21 × 24))
+            Half-life: 21 days
+        end note
+    }
+    
+    rectangle "Recency Bonus" as RecBonus #FFE082 {
+        note right
+            +0.1 (< 24h)
+            +0.05 (< 7 days)
+        end note
+    }
+}
+
+SimScore --> Final : × 0.45
+QualScore --> Final : × 0.30
+RecScore --> Final : × 0.15
+PopScore --> Final : × 0.10
+TimeDecay --> Final : × 0.10
+RecBonus --> Final : +
+
+@enduml
+
+@startuml CBF_vs_CF_Comparison
+!theme plain
+skinparam backgroundColor #FFFFFF
+skinparam rectangle {
+    BackgroundColor #F3E5F5
+    BorderColor #7B1FA2
+}
+
+title CBF vs CF Comparison
+
+rectangle "CBF - Content-Based Filtering" as CBF #E1BEE7 {
+    rectangle "Strengths" as CBF_Pros #C8E6C9 {
+        • Independent of other users\n• Handles cold-start well\n• High personalization
+    }
+    
+    rectangle "Weaknesses" as CBF_Cons #FFCDD2 {
+        • Lacks diversity\n• Hard to detect new trends
+    }
+    
+    rectangle "Method" as CBF_Method #BBDEFB {
+        Content Similarity\n(Vector-based)
+    }
+    
+    rectangle "Signals" as CBF_Signals #FFF9C4 {
+        Vector, Recent,\nCategory, Author, Time
+    }
+}
+
+rectangle "CF - Collaborative Filtering" as CF #B39DDB {
+    rectangle "Strengths" as CF_Pros #C8E6C9 {
+        • Discovers hidden patterns\n• More diverse\n• Reflects community trends
+    }
+    
+    rectangle "Weaknesses" as CF_Cons #FFCDD2 {
+        • Cold-start problem\n• Needs more data\n• Hard to explain
+    }
+    
+    rectangle "Method" as CF_Method #BBDEFB {
+        User Similarity\n(Behavior-based)
+    }
+    
+    rectangle "Signals" as CF_Signals #FFF9C4 {
+        Similarity, Quality,\nRecency, Popularity, Time
+    }
+}
+
+rectangle "Hybrid Approach" as Hybrid #CE93D8 {
+    note right
+        **Combining CBF and CF:**
+        1. Get top 100 from each method
+        2. Interleave with dynamic weights
+        3. Based on pool quality
+        4. Apply Diversity Filter
+        
+        **Benefits:**
+        • Leverage strengths of both
+        • Minimize weaknesses
+        • Balance personalization and diversity
+    end note
+}
+
+CBF --> Hybrid
+CF --> Hybrid
+
+@enduml
+
+@startuml Interaction_Weights
+!theme plain
+skinparam backgroundColor #FFFFFF
+skinparam rectangle {
+    BackgroundColor #FFF3E0
+    BorderColor #E65100
+}
+
+title Interaction Weights & Recency Weights
+
+rectangle "Interaction Weights" as IW {
+    rectangle "REPLY_POST: 0.4" as Reply #FFCCBC
+    rectangle "SHARE: 0.35" as Share #FFE0B2
+    rectangle "LIKE: 0.2" as Like #FFF9C4
+    rectangle "POST_CLICK: 0.1" as Click #FFF59D
+    rectangle "POST_VIEW: 0.05" as View #E8F5E9
+}
+
+Reply -[#FF6F00]-> IW
+Share -[#FF8F00]-> IW
+Like -[#F57C00]-> IW
+Click -[#FFB300]-> IW
+View -[#FFC400]-> IW
+
+rectangle "Recency Weights" as RW {
+    rectangle "0-7 days: 1.0" as R1 #C8E6C9
+    rectangle "8-14 days: 0.8" as R2 #A5D6A7
+    rectangle "15-21 days: 0.6" as R3 #81C784
+    rectangle "22-30 days: 0.4" as R4 #66BB6A
+    rectangle ">30 days: 0.2" as R5 #4CAF50
+}
+
+R1 -[#2E7D32]-> RW
+R2 -[#388E3C]-> RW
+R3 -[#43A047]-> RW
+R4 -[#4CAF50]-> RW
+R5 -[#66BB6A]-> RW
+
+rectangle "Final Weight Formula" as Formula #FFE082 {
+    note right
+        **Weight = Interaction Weight × Recency Weight**
+        
+        Examples:
+        - Reply (7 days ago): 0.4 × 1.0 = 0.4
+        - Share (15 days ago): 0.35 × 0.6 = 0.21
+        - Like (25 days ago): 0.2 × 0.4 = 0.08
+    end note
+}
+
+IW --> Formula
+RW --> Formula
+
+@enduml
+
+@startuml Dual_Vector_Strategy
+!theme plain
+skinparam backgroundColor #FFFFFF
+skinparam rectangle {
+    BackgroundColor #E3F2FD
+    BorderColor #1565C0
+}
+
+title CBF - Dual Vector Strategy
+
+rectangle "User Profile" as Profile {
+    rectangle "Long-term Vector" as LongTerm #90CAF9 {
+        note right
+            **Source:** Persona from registration
+            **Characteristics:** 
+            • Core preferences
+            • Stable over time
+            • Updated when user updates profile
+        end note
+    }
+    
+    rectangle "Short-term Vector" as ShortTerm #64B5F6 {
+        note right
+            **Source:** Interactions from last 30 days
+            **Characteristics:**
+            • Temporary trends
+            • Dynamic, changes quickly
+            • Updated in real-time
+        end note
+    }
+}
+
+rectangle "Dynamic Combination" as Combine #42A5F5 {
+    note right
+        **Weights based on number of interactions:**
+        
+        • >50 interactions: 
+          Long 40%, Short 60%
+        
+        • 20-50 interactions:
+          Long 50%, Short 50%
+        
+        • <20 interactions:
+          Long 60%, Short 40%
+    end note
+}
+
+LongTerm --> Combine : Weight 0.45-0.60
+ShortTerm --> Combine : Weight 0.35-0.60
+
+rectangle "Combined Vector" as Combined #2196F3 {
+    note right
+        Combined = 
+        Long-term × w_long + 
+        Short-term × w_short
+        
+        Then normalize to unit vector
+    end note
+}
+
+Combine --> Combined
+
+rectangle "Post Vector" as PostVec #BBDEFB
+
+rectangle "Cosine Similarity" as Cosine #1E88E5 {
+    note right
+        Vector Score = 
+        cosine(Combined Vector, Post Vector)
+        
+        Or calculate separately:
+        • Long-term Score: cosine(Long, Post) × 0.45
+        • Short-term Score: cosine(Short, Post) × 0.35
+        • Vector Score = Long Score + Short Score
+    end note
+}
+
+Combined --> Cosine
+PostVec --> Cosine
+
+@enduml
+
+@startuml Hybrid_Recommendation_Flow
+!theme plain
+skinparam backgroundColor #FFFFFF
+skinparam activity {
+    BackgroundColor #F3E5F5
+    BorderColor #7B1FA2
+    FontSize 14
+}
+
+title Hybrid Recommendation System - Process Flow
+
+start
+
+:Get Hybrid Recommendations;
+
+partition "Parallel Candidate Generation" {
+    :Get CBF Candidates\n(top 100 from CBF);
+    :Get CF Candidates\n(top 100 from CF);
+    :Get Popular Posts\n(top 100 by engagement);
+}
+
+partition "Dynamic Weight Calculation" {
+    :Calculate CBF Weight\n= min(pool.length / 50, 1.0);
+    :Calculate CF Weight\n= min(pool.length / 50, 1.0);
+    :Set Popular Weight = 0.2\n(fixed);
+    :Normalize Weights\n(sum = 1.0);
+}
+
+if (All pools empty?) then (Yes)
+    :Fallback to Popular Posts\n(sorted by engagement);
+    stop
+else (No)
+endif
+
+partition "Weighted Interleaving" {
+    :Interleave CBF Pool\n(weight ~40%);
+    :Interleave CF Pool\n(weight ~40%);
+    :Interleave Popular Pool\n(weight ~20%);
+    :Remove Duplicates;
+}
+
+:Apply Diversity Filter\n(Max posts per author/category);
+
+:Cache to Redis\n(TTL: 30 minutes);
+
+:Return Recommendations;
+
+stop
+
+@enduml
+
+@startuml Hybrid_Weight_Calculation
+!theme plain
+skinparam backgroundColor #FFFFFF
+skinparam rectangle {
+    BackgroundColor #F3E5F5
+    BorderColor #7B1FA2
+}
+
+title Hybrid Recommendation - Dynamic Weight Calculation
+
+rectangle "Candidate Pools" as Pools {
+    rectangle "CBF Pool\n(100 candidates)" as CBFPool #E1BEE7
+    rectangle "CF Pool\n(100 candidates)" as CFPool #B39DDB
+    rectangle "Popular Pool\n(100 posts)" as PopularPool #9C27B0
+}
+
+rectangle "Weight Calculation" as Calc {
+    rectangle "CBF Weight" as CBFWeight #C8E6C9 {
+        note right
+            Formula:
+            min(pool.length / 50, 1.0)
+            
+            Example:
+            If pool.length = 80
+            Weight = min(80/50, 1.0) = 1.0
+            (Max weight reached)
+        end note
+    }
+    
+    rectangle "CF Weight" as CFWeight #A5D6A7 {
+        note right
+            Same formula as CBF:
+            min(pool.length / 50, 1.0)
+        end note
+    }
+    
+    rectangle "Popular Weight" as PopularWeight #81C784 {
+        note right
+            Fixed weight: 0.2
+            Always 20% to ensure
+            diversity and trends
+        end note
+    }
+}
+
+CBFPool --> CBFWeight
+CFPool --> CFWeight
+PopularPool --> PopularWeight
+
+rectangle "Normalization" as Norm #42A5F5 {
+    note right
+        Normalize to sum = 1.0
+        
+        Example:
+        - CBF Weight: 1.0
+        - CF Weight: 1.0
+        - Popular Weight: 0.2
+        - Total: 2.2
+        
+        Normalized:
+        - CBF: 1.0 / 2.2 ≈ 0.45 (45%)
+        - CF: 1.0 / 2.2 ≈ 0.45 (45%)
+        - Popular: 0.2 / 2.2 ≈ 0.09 (9%)
+        
+        But Popular is fixed at 20%,
+        so final distribution:
+        - CBF: ~40%
+        - CF: ~40%
+        - Popular: ~20%
+    end note
+}
+
+CBFWeight --> Norm
+CFWeight --> Norm
+PopularWeight --> Norm
+
+rectangle "Interleaving" as Interleave #2196F3 {
+    note right
+        Weighted interleaving:
+        - Priority based on weights
+        - Higher weight = more items
+        - Remove duplicates
+        - Maintain diversity
+    end note
+}
+
+Norm --> Interleave
+
+@enduml
