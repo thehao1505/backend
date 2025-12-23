@@ -257,6 +257,54 @@ Hybrid Approach này tận dụng được điểm mạnh của cả CBF (cá nh
 
 ## Slide 15: Evaluation & Results
 
+Để đánh giá hiệu quả của hệ thống gợi ý, em sử dụng phương pháp Offline Evaluation với dữ liệu giả lập (synthetic data). Em xin trình bày về quy trình đánh giá này:
+
+**Bước 1: Tạo Dữ Liệu Giả Lập (Data Generation)**
+
+Em sử dụng script `generate_data.ts` để tạo ra một dataset mô phỏng hành vi người dùng thực tế với các đặc điểm sau:
+
+**Thành phần Dataset:**
+- 2,000 users với 3 loại hành vi:
+  - Power Users (5%): 300-600 interactions, sở thích rõ ràng
+  - Casual Users (70%): 50-150 interactions, hoạt động vừa phải
+  - New Users (25%): 10-30 interactions, mới tham gia
+- 10,000 posts phân bố trên 12 chủ đề: Công nghệ, Du lịch, Ẩm thực, Thể thao, Thời trang, Gaming, Tài chính, Giải trí, Thú cưng, Giáo dục, Nhà cửa, Xe
+- Hơn 300,000 interactions bao gồm: View, Like, Share, Reply, Click, Search
+
+**Cách Tạo Interactions:**
+- Mỗi user có persona (sở thích) được gán ngẫu nhiên từ các chủ đề
+- Interactions được tạo dựa trên 3 yếu tố:
+  1. Interest Match Rate (75-85%): Chọn posts từ chủ đề yêu thích
+  2. Viral Click Rate (20-40%): Click vào posts phổ biến (viral posts)
+  3. Engagement Rate (15-40%): Từ view chuyển sang like/share/reply
+- Phân phối interactions theo Power Law: Một số ít users có nhiều interactions, đa số có ít
+- Thêm 10% noise (interactions ngẫu nhiên) để mô phỏng hành vi thực tế
+
+**Bước 2: Chia Train/Test Split**
+
+Em chia dữ liệu theo tỷ lệ 80-20 dựa trên thời gian (time-based split):
+- Training Set (80%): Các interactions cũ hơn, dùng để xây dựng user profiles và training models
+- Test Set (20%): Các interactions mới hơn, được ẩn đi và dùng làm ground truth để đánh giá
+
+Cách chia: Với mỗi user, sắp xếp interactions theo thời gian, lấy 80% đầu làm train, 20% cuối làm test. Điều này mô phỏng đúng scenario thực tế: hệ thống học từ quá khứ và dự đoán tương lai.
+
+**Bước 3: Tạo Recommendations (Predict)**
+
+Script `predict.ts` thực hiện:
+- Load danh sách users từ test set
+- Với mỗi user, gọi recommendation service (Hybrid, CBF, hoặc CF) để tạo top-K recommendations
+- Lưu kết quả vào RecommendationLog trong database
+- Export ra CSV file để phục vụ đánh giá
+
+**Bước 4: Đánh Giá (Evaluate)**
+
+Script `evaluate.ts` so sánh recommendations với ground truth:
+- Load ground truth từ `test_interactions.csv`
+- Load predictions từ RecommendationLog
+- Tính các metrics: Precision@K, Recall@K, MAP@K, NDCG@K, Diversity, Coverage
+
+**Kết Quả Đánh Giá:**
+
 Cold-start users (K=10):
 Hybrid đạt Precision@10 = 0.387, Recall@10 = 0.234, MAP@10 = 0.341, cao hơn rõ rệt so với Pure CF (0.182 / 0.095 / 0.156) và Pure CBF (0.312 / 0.187 / 0.267). Độ bao phủ cũng cao nhất (35.2%), cho thấy Hybrid xử lý tốt bài toán thiếu dữ liệu ban đầu.
 
@@ -266,6 +314,6 @@ Hybrid tiếp tục dẫn đầu với Precision@10 = 0.523, Recall@10 = 0.387, 
 Toàn bộ người dùng (K=10):
 Hybrid đạt Precision@10 = 0.478, Recall@10 = 0.334, MAP@10 = 0.432, so với Pure CF (0.356 / 0.247 / 0.312) và Pure CBF (0.412 / 0.289 / 0.367). Thời gian phản hồi trung bình là 432 ms (cao hơn Pure CF: 278 ms) nhưng bù lại có cache hit rate cao nhất: 75.8%, đảm bảo hiệu năng hệ thống trong thực tế.
 
-👉 Kết luận ngắn gọn: Hybrid cho độ chính xác, khả năng bao phủ và đa dạng tốt nhất trên mọi nhóm người dùng, với chi phí độ trễ tăng nhẹ nhưng vẫn trong ngưỡng chấp nhận được.
+Kết luận: Hybrid cho độ chính xác, khả năng bao phủ và đa dạng tốt nhất trên mọi nhóm người dùng, với chi phí độ trễ tăng nhẹ nhưng vẫn trong ngưỡng chấp nhận được.
 
 ## Slide 16: Conclusion

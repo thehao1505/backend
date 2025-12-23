@@ -395,3 +395,94 @@ Final_Score = 0.45 × Similarity_Score +
 - Slide 13: Comparison table reveal
 - Slide 14: Sequential reveal của 3 giai đoạn
 
+---
+
+## Slide 15: Evaluation & Results - Offline Evaluation
+
+### Tiêu đề chính:
+**Evaluation & Results - Offline Evaluation**
+
+### Nội dung slide:
+
+#### Phần 1: Quy Trình Offline Evaluation (Flow diagram)
+1. **Data Generation** → Tạo dữ liệu giả lập
+2. **Train/Test Split** → Chia 80/20 theo thời gian
+3. **Predict** → Tạo recommendations
+4. **Evaluate** → So sánh với ground truth
+
+#### Phần 2: Tạo Dữ Liệu Giả Lập
+
+**Dataset Composition:**
+- 2,000 users (Power 5%, Casual 70%, New 25%)
+- 10,000 posts (12 categories)
+- 300,000+ interactions
+- Visual: Pie chart cho user distribution
+
+**Cách Tạo Interactions:**
+- Interest Match Rate (75-85%): Posts từ chủ đề yêu thích
+- Viral Click Rate (20-40%): Posts phổ biến
+- Engagement Rate (15-40%): View → Like/Share/Reply
+- 10% Noise: Interactions ngẫu nhiên
+- Visual: Flow diagram cho interaction generation
+
+#### Phần 3: Train/Test Split
+
+**Time-based Split (80/20):**
+- Training Set: 80% interactions cũ hơn
+  - Xây dựng user profiles
+  - Training models
+- Test Set: 20% interactions mới hơn
+  - Ground truth cho evaluation
+  - Ẩn đi khi tạo recommendations
+- Visual: Timeline diagram
+
+#### Phần 4: Evaluation Metrics
+
+**Accuracy Metrics:**
+- Precision@K: Tỷ lệ recommendations đúng
+- Recall@K: Tỷ lệ ground truth được tìm thấy
+- MAP@K: Mean Average Precision (ranking quality)
+- NDCG@K: Normalized Discounted Cumulative Gain
+
+**Quality Metrics:**
+- Diversity: Đa dạng về categories/authors
+- Coverage: Tỷ lệ items được recommend
+- Visual: Table hoặc bar chart
+
+#### Phần 5: Kết Quả
+
+**Cold-start Users:**
+- Hybrid: P@10=0.387, R@10=0.234, MAP@10=0.341
+- vs Pure CF: 0.182 / 0.095 / 0.156
+- vs Pure CBF: 0.312 / 0.187 / 0.267
+- Visual: Comparison bar chart
+
+**Active Users:**
+- Hybrid: P@10=0.523, R@10=0.387, MAP@10=0.476
+- Diversity: 0.64 (highest)
+- Visual: Comparison bar chart
+
+**Overall Performance:**
+- Hybrid: Best across all metrics
+- Response time: 432ms (acceptable)
+- Cache hit rate: 75.8% (highest)
+- Visual: Summary table
+
+#### Phần 6: Kết Luận
+
+- Hybrid outperforms cả CBF và CF
+- Best accuracy, coverage, và diversity
+- Acceptable latency với high cache hit rate
+
+### Visual Elements:
+- Flow diagram cho evaluation process
+- Pie chart cho user distribution
+- Timeline cho train/test split
+- Bar charts cho comparison metrics
+- Summary table cho overall results
+
+### Design Notes:
+- Use consistent color scheme với các slides trước
+- Highlight Hybrid results với accent color
+- Clear visual hierarchy để dễ đọc metrics
+
