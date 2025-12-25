@@ -36,9 +36,9 @@ services:
       context: .
       dockerfile: Dockerfile
     container_name: backend_service
-    depends_on:
-      - redis
-      - mongodb
+    # depends_on:
+    #   - redis
+    #   - mongodb
     restart: always
     # for debug
     # restart: 'no'
