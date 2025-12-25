@@ -141,7 +141,6 @@ export class RecommendationService {
         .populate('author', 'username avatar fullName')
         .lean()
 
-      // Áp dụng đa dạng hóa để 1 user không chiếm hết feed
       const diversePosts = await this.commonService._getDiversePostsByAuthor(followingPosts, limit)
 
       return {
@@ -165,6 +164,8 @@ export class RecommendationService {
     if (text) {
       await this.postService.searchActivity(text, userId, normalizedEmbedding)
     }
+
+    // Search for posts using vector search
     const similar = await this.qdrantService.searchSimilar(configs.postCollectionName, normalizedEmbedding, Number(limit), Number(page), {})
 
     const similarPostIds = similar.map(item => item.id)
@@ -176,20 +177,32 @@ export class RecommendationService {
     const idToPostMap = new Map(similarPostsRaw.map(post => [post._id.toString(), post]))
     const similarPosts = similarPostIds.map(id => idToPostMap.get(id.toString())).filter(Boolean)
 
-    return similarPosts
+    // Search for users using fulltext search
+    const skip = (Number(page) - 1) * Number(limit)
+    const users = text
+      ? await this.userModel
+          .find({ $text: { $search: text } })
+          .select('avatar username fullName')
+          .skip(skip)
+          .limit(Number(limit))
+          .sort({ score: { $meta: 'textScore' } })
+          .lean()
+      : []
+
+    return {
+      similarPosts,
+      users,
+    }
   }
 
-  // Delegate to hybrid service
   async getHybridRecommendations(userId: string, query: QueryRecommendationDto) {
     return this.hybridService.getHybridRecommendations(userId, query)
   }
 
-  // Delegate to CBF service
   async getRecommendations_CBF(userId: string, query: QueryRecommendationDto) {
     return this.cbfService.getRecommendations_CBF(userId, query)
   }
 
-  // Delegate to CF service
   async getRecommendations_CF(userId: string, query: QueryRecommendationDto) {
     return this.cfService.getRecommendations_CF(userId, query)
   }

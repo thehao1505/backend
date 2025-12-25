@@ -1,35 +1,35 @@
 services:
-  redis:
-    image: redis:latest
-    container_name: social_app_redis_service
-    restart: always
-    ports:
-      - '6379:6379'
+  # redis:
+  #   image: redis:latest
+  #   container_name: social_app_redis_service
+  #   restart: always
+  #   ports:
+  #     - '6379:6379'
 
-  qdrant:
-    image: qdrant/qdrant
-    container_name: qdrant
-    ports:
-      - '6333:6333'
-    volumes:
-      - qdrant_storage:/qdrant/storage
-    environment:
-      QDRANT_API_KEY: my-secret-key-for-qdrant
-    restart: unless-stopped
+  # qdrant:
+  #   image: qdrant/qdrant
+  #   container_name: qdrant
+  #   ports:
+  #     - '6333:6333'
+  #   volumes:
+  #     - qdrant_storage:/qdrant/storage
+  #   environment:
+  #     QDRANT_API_KEY: my-secret-key-for-qdrant
+  #   restart: unless-stopped
 
-  mongodb:
-    image: mongo:latest
-    container_name: mongodb
-    restart: always
-    ports:
-      - '27017:27017'
-    environment:
-      MONGO_INITDB_ROOT_USERNAME: ${MONGO_USERNAME}
-      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_PASSWORD}
-      MONGO_INITDB_DATABASE: SA
-    volumes:
-      - mongodb_data:/data/db
-      - mongodb_config:/data/configdb
+  # mongodb:
+  #   image: mongo:latest
+  #   container_name: mongodb
+  #   restart: always
+  #   ports:
+  #     - '27017:27017'
+  #   environment:
+  #     MONGO_INITDB_ROOT_USERNAME: ${MONGO_USERNAME}
+  #     MONGO_INITDB_ROOT_PASSWORD: ${MONGO_PASSWORD}
+  #     MONGO_INITDB_DATABASE: SA
+  #   volumes:
+  #     - mongodb_data:/data/db
+  #     - mongodb_config:/data/configdb
 
   app:
     build:
@@ -49,11 +49,10 @@ services:
       - '12345:3000'
     environment:
       - NODE_ENV=production
-
-volumes:
-  mongodb_data:
-    driver: local
-  mongodb_config:
-    driver: local
-  qdrant_storage:
-    driver: local
+# volumes:
+#   mongodb_data:
+#     driver: local
+#   mongodb_config:
+#     driver: local
+#   qdrant_storage:
+#     driver: local

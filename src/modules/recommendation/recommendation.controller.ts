@@ -51,39 +51,4 @@ export class RecommendationController {
   async getRecSysSimilarPosts(@Param('id') id: string, @Query() query: QueryRecommendationDto) {
     return this.recommendationService.getSimilarPosts(id, query)
   }
-
-  // @Get('for-your-page')
-  // @ApiOperation({ summary: 'Get personalized feed recommendations' })
-  // async getFeed(@Req() req: Request, @Query() query: QueryRecommendationDto) {
-  //   return this.recommendationService.getRecommendationsForUser(req.user['_id'], query)
-  // }
-
-  // @Get('following')
-  // @ApiOperation({ summary: 'Get following recommendations' })
-  // async getFollowing(@Req() req: Request, @Query() query: QueryRecommendationDto) {
-  //   return this.recommendationService.getFollowingRecommendations(req.user['_id'], query)
-  // }
-
-  // @Get('similar/:postId')
-  // @ApiOperation({ summary: 'Get similar posts recommendations' })
-  // async getSimilarPosts(@Param('postId') postId: string, @Query() query: QueryRecommendationDto) {
-  //   return this.recommendationService.getSimilarPosts(postId, query)
-  // }
-
-  // @Get('metrics')
-  // @ApiOperation({ summary: 'Get recommendation system metrics' })
-  // async getMetrics() {
-  //   return this.recommendationService.getRecommendationMetrics()
-  // }
-
-  // @Get('search')
-  // @ApiOperation({ summary: 'Get recommendation system metrics' })
-  // async search(@Req() req: Request, @Query() query: QuerySearchDto) {
-  //   return this.recommendationService.search(query, req.user['_id'])
-  // }
-
-  // @Get('CF')
-  // async getCF(@Req() req: Request) {
-  //   return this.recommendationService.getCFRecommendations(req.user['_id'], 10)
-  // }
 }
