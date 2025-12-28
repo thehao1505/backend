@@ -11,13 +11,10 @@ async function bootstrap() {
     logger: ['log', 'error', 'warn', 'debug', 'verbose'],
   })
 
-  // Workers sẽ tự động start khi processors được registered
-  // Log khi worker sẵn sàng
   logger.log('✅ Worker is ready and listening for jobs...')
   logger.log('📋 Registered queues: embedding, notifications')
   logger.log('👂 Waiting for jobs to process...')
 
-  // Giữ process chạy
   process.on('SIGTERM', async () => {
     logger.log('SIGTERM received, shutting down worker...')
     await app.close()
