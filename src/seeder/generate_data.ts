@@ -21,7 +21,6 @@ const CONFIG = {
   CASUAL_USER_RATIO: 0.7,
   NEW_USER_RATIO: 0.25,
 
-  // Độ nhiễu
   NOISE_RATIO: 0.1,
 }
 
@@ -96,7 +95,7 @@ const TOPICS = [
       'Hướng dẫn leo rank {keyword} thần tốc',
       'Cấu hình PC để chiến mượt {keyword}',
     ],
-    seasonalBoost: [5, 6, 7, 0, 1], // Nghỉ hè + nghỉ Tết
+    seasonalBoost: [5, 6, 7, 0, 1],
   },
   {
     id: 'finance',
@@ -109,7 +108,7 @@ const TOPICS = [
       'Cách quản lý tài chính cá nhân và {keyword} hiệu quả',
       'Biến động giá {keyword} hôm nay làm nhà đầu tư hoảng loạn',
     ],
-    seasonalBoost: [0, 1, 10, 11], // Cuối năm/Đầu năm
+    seasonalBoost: [0, 1, 10, 11],
   },
   {
     id: 'entertainment',
@@ -122,7 +121,7 @@ const TOPICS = [
       'Top những bộ phim về {keyword} hay nhất mọi thời đại',
       'Reaction về màn trình diễn của {keyword}',
     ],
-    seasonalBoost: [0, 1, 2, 5, 6, 11, 12], // Lễ tết, hè
+    seasonalBoost: [0, 1, 2, 5, 6, 11, 12],
   },
   {
     id: 'pets',
@@ -135,7 +134,7 @@ const TOPICS = [
       'Câu chuyện cảm động về {keyword} cứu chủ',
       'Hài hước: Khi {keyword} phá nhà',
     ],
-    seasonalBoost: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11], // Quanh năm
+    seasonalBoost: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11],
   },
   {
     id: 'education',
@@ -148,7 +147,7 @@ const TOPICS = [
       'Mẹo thi {keyword} điểm cao ít người biết',
       'Review cuốn sách về {keyword} thay đổi tư duy',
     ],
-    seasonalBoost: [3, 4, 5, 8, 9, 11], // Mùa thi, tựu trường
+    seasonalBoost: [3, 4, 5, 8, 9, 11],
   },
   {
     id: 'home_decor',
@@ -161,7 +160,7 @@ const TOPICS = [
       'Mẹo {keyword} giúp nhà cửa luôn gọn gàng',
       'Top món đồ {keyword} không thể thiếu cho người lười',
     ],
-    seasonalBoost: [0, 1, 11, 12], // Dọn nhà đón Tết, cuối năm
+    seasonalBoost: [0, 1, 11, 12],
   },
   {
     id: 'automotive',
@@ -174,7 +173,7 @@ const TOPICS = [
       'Chi phí nuôi {keyword} một tháng hết bao nhiêu?',
       'Bộ ảnh {keyword} cực ngầu tại trường đua',
     ],
-    seasonalBoost: [0, 1, 4, 5], // Đi chơi Tết, nghỉ lễ
+    seasonalBoost: [0, 1, 4, 5],
   },
   {
     id: 'parenting',
@@ -187,7 +186,7 @@ const TOPICS = [
       'Review các loại {keyword} tốt nhất cho trẻ sơ sinh',
       'Góc chia sẻ: Cân bằng giữa công việc và {keyword}',
     ],
-    seasonalBoost: [2, 3, 5, 8, 11], // Mùa hè, tựu trường, mùa đông (ốm vặt)
+    seasonalBoost: [2, 3, 5, 8, 11],
   },
   {
     id: 'spiritual',
@@ -200,7 +199,7 @@ const TOPICS = [
       'Cách ứng dụng {keyword} để thu hút may mắn',
       'Podcast chữa lành: Buông bỏ những {keyword} tiêu cực',
     ],
-    seasonalBoost: [0, 1, 6, 7], // Đầu năm (xem bói), tháng cô hồn (tháng 7 âm)
+    seasonalBoost: [0, 1, 6, 7],
   },
   {
     id: 'art_creative',
@@ -213,7 +212,7 @@ const TOPICS = [
       'Thử thách 30 ngày luyện tập {keyword}',
       'Góc truyền cảm hứng: Những nghệ sĩ {keyword} tài năng',
     ],
-    seasonalBoost: [5, 6, 7, 8, 9], // Mùa hè, mùa thu
+    seasonalBoost: [5, 6, 7, 8, 9],
   },
 ]
 
@@ -229,7 +228,7 @@ interface UserBehavior {
   maxInteractions: number
   interestMatchRate: number
   viralClickRate: number
-  eagagementRate: number // View -> like, share, reply, click
+  eagagementRate: number
 }
 
 const USER_BEHAVIORS: Record<UserType, UserBehavior> = {
@@ -268,15 +267,11 @@ async function bootstrap() {
 
   logger.log(`--- Starting Data Generation ---`)
 
-  // Tạo thư mục output nếu chưa có
   if (!fs.existsSync(CONFIG.DATA_PATH)) {
     fs.mkdirSync(CONFIG.DATA_PATH, { recursive: true })
   }
 
   try {
-    // ============================================
-    // BƯỚC 1: CREATE USERS WITH BEHAVIOR TYPES
-    // ============================================
     const defaultPasswordHash = await bcrypt.hash('password', 12)
     logger.log(`✅ Pre-hashed password generated`)
 
@@ -453,7 +448,6 @@ async function bootstrap() {
 
     posts.sort((a, b) => (b as any).viralScore - (a as any).viralScore)
 
-    // Remove viralScore từ posts trước khi export
     const postsForExport = posts.map(p => {
       const { viralScore, ...rest } = p as any
       return rest
@@ -467,7 +461,7 @@ async function bootstrap() {
     logger.log(`[Step 3] Create follow relationships`)
 
     const follows: UserFollow[] = []
-    const followGraph = new Map<string, Set<string>>() // userId -> Set<followingId>
+    const followGraph = new Map<string, Set<string>>()
 
     for (const userId of userIds) {
       const behavior = userBehaviors.get(userId)!

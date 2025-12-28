@@ -5,4 +5,4 @@ export * from './post.entity'
 export * from './user.entity'
 export * from './user-follow.entity'
 export * from './user-activity.entity'
-export * from './recommendation-log.entity' // <-- THÊM DÒNG NÀY
+export * from './recommendation-log.entity'

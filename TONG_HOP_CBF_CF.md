@@ -59,7 +59,7 @@ async getRecommendations_CBF(userId: string, query: QueryRecommendationDto)
 #### Bước 2: Vector Similarity Search
 
 - Sử dụng `userInterestVector` (combined) hoặc `recentInteractionsProfile` làm query vector
-- Tìm top 800 candidates từ Qdrant (expanded pool để có đủ diversity)
+- Tìm top 100 candidates từ Qdrant (expanded pool để có đủ diversity)
 - Loại trừ:
   - Posts của chính user
   - Posts đã tương tác (LIKE, SHARE, REPLY_POST)

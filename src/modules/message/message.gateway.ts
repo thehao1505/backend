@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-unused-vars */
 import { MessageService, UserService } from '@modules/index-service'
 import { Logger } from '@nestjs/common'
 import {
@@ -35,9 +34,6 @@ export class MessageGateway implements OnGatewayConnection, OnGatewayDisconnect 
     Logger.log('✅ WebSocket server has been initialized')
   }
 
-  // are Lifecycles Hooks provided by Nestjs for Websocket Gateway.
-  // They are not "Handler registered by Nest via Decorators" as @subscribeMemessage ('chat'), so @useGuards () cannot be automatically applied.
-  // In other words: Guard does not know where to "hook" to run before handleconnection ().
   async handleConnection(client: Socket) {
     try {
       const userId = await this.authenticateSocket(client)

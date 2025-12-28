@@ -121,7 +121,7 @@ Thứ tư là Category Preferences - hệ thống phân tích các chủ đề m
 
 Cuối cùng là Author Preferences - tương tự như category, nhưng dựa trên các tác giả mà người dùng thường xuyên tương tác.
 
-Sau khi thu thập đủ các tín hiệu này, hệ thống sử dụng Qdrant để tìm kiếm 800 bài viết candidates có vector tương đồng nhất với profile người dùng.
+Sau khi thu thập đủ các tín hiệu này, hệ thống sử dụng Qdrant để tìm kiếm 100 bài viết candidates có vector tương đồng nhất với profile người dùng.
 
 ## Slide 10: CBF - Multi-Signal Scoring Formula
 
@@ -315,5 +315,169 @@ Toàn bộ người dùng (K=10):
 Hybrid đạt Precision@10 = 0.478, Recall@10 = 0.334, MAP@10 = 0.432, so với Pure CF (0.356 / 0.247 / 0.312) và Pure CBF (0.412 / 0.289 / 0.367). Thời gian phản hồi trung bình là 432 ms (cao hơn Pure CF: 278 ms) nhưng bù lại có cache hit rate cao nhất: 75.8%, đảm bảo hiệu năng hệ thống trong thực tế.
 
 Kết luận: Hybrid cho độ chính xác, khả năng bao phủ và đa dạng tốt nhất trên mọi nhóm người dùng, với chi phí độ trễ tăng nhẹ nhưng vẫn trong ngưỡng chấp nhận được.
+
+**Các tham số cấu hình**
+
+### 1. **K (Top-K)**
+- **Định nghĩa:** K (Top-K): Số lượng items được recommend cho mỗi user (ví dụ: K=10 nghĩa là top 10 recommendations)
+- **Ý Nghĩa:**
+  - Metrics được tính trên K items đầu tiên trong danh sách recommendation
+  - K càng lớn → recall cao hơn nhưng precision có thể giảm
+  - K càng nhỏ → precision cao hơn nhưng có thể bỏ sót items quan trọng
+
+**METRIC CHÍNH (Accuracy Metrics)**
+
+### 1. **Precision@K**
+- **Định nghĩa:** Tỷ lệ items được recommend mà thực sự relevant trong top K recommendations.
+- **Công thức:**
+      ```
+      Precision@K = (Số items relevant trong top K)/K
+      ```
+- **Ví dụ:**
+  - Recommendations: [A, B, C, D, E] (top 5)
+  - Ground Truth: {A, C, E, F}
+  - Relevant items trong top 5: A, C, E (3 items)
+  - Precision@5 = 3/5 = 0.6 (60%)
+- **Ý nghĩa:**
+  - Good: 0.7 - 1.0
+  - Medium: 0.3 - 0.7
+  - Bad: <0.3
+
+### 2. **Recall@K**
+- **Định nghĩa:** Tỷ lệ items relevant được tìm thấy trong top K recommendations.
+- **Công thức:**
+      ```
+      Recall@K = (Số items relevant trong top K) / (Tổng số items relevant)
+      ```
+- **Ví dụ:**
+  - Recommendations: [A, B, C, D, E] (top 5)
+  - Ground Truth: {A, C, E, F, G, H} (6 items relevant)
+  - Relevant items trong top 5: A, C, E (3 items)
+  - Recall@5 = 3/6 = 50%
+- **Ý nghĩa:**
+  - Good: 0.7 - 1.0
+  - Medium: 0.3 - 0.7
+  - Bad: <0.3
+
+### 3. **Average Precision@K AP@K**
+- **Định nghĩa:** Trung bình precision tại mỗi vị trí có relevant item.
+- **Công thức:**
+      ```
+      AP@K = Σ(Precision@i tại mỗi vị trí có relevant item) / (số items relevant)
+      ```
+- **Ví dụ:**
+  - Recommendations: [A, B, C, D, E] (top 5)
+  - Ground Truth: {A, C, E}
+  - Relevant items: A (vị trí 1), C (vị trí 3), E (vị trí 5)
+  - Precision@1 = 1/1 = 1.0 (có 1 relevant trong 1 item đầu)
+  - Precision@3 = 2/3 = 0.67 (có 2 relevant trong 3 items đầu)
+  - Precision@5 = 3/5 = 0.6 (có 3 relevant trong 5 items đầu)
+  - AP@5 = (1.0 + 0.67 + 0.6) / 3 = 0.76
+- **Ý nghĩa:**
+  - Good: 0.7 - 1.0 - Relevant items xuất hiện sớm trong danh sách
+  - Medium: 0.3 - 0.7 - Relevant items xuất hiện ở giữa danh sách
+  - Bad: <0.3 - Relevant items xuất hiện muộn hoặc không có
+
+### 4. **Mean Average Precision@K MAP@K**
+- **Định nghĩa:** Trung bình AP@K của tất cả users.
+- **Công thức:**
+      ```
+      MAP@K = Σ(AP@K của mỗi user) / (số items relevant)
+      ```
+- **Ví dụ:**
+  - User 1: AP@10 = 0.8
+  - User 2: AP@10 = 0.6
+  - User 3: AP@10 = 0.9
+  - MAP@10 = (0.8 + 0.6 + 0.9) / 3 = 0.77
+- **Ý nghĩa:**
+  - Metric tổng hợp để đánh giá chất lượng recommendation trên toàn bộ users.
+
+### 5. **NDCG@K (Normalized Discounted Cumulative Gain@K)**
+- **Định nghĩa:** Đo chất lượng ranking với discount factor cho vị trí thấp hơn.
+- **Công thức:**
+      ```
+      DCG@K = Σ(relevance_i / log2(i + 1))  với i từ 1 đến K
+      IDCG@K = DCG@K lý tưởng (tất cả relevant items ở top)
+      NDCG@K = DCG@K / IDCG@K
+      ```
+- **Ví dụ:**
+  - Recommendations: [A(relevant), B(not), C(relevant), D(not), E(relevant)]
+  - DCG@5 = 1/log2(2) + 0/log2(3) + 1/log2(4) + 0/log2(5) + 1/log2(6)
+        = 1/1 + 0 + 1/2 + 0 + 1/2.58 = 1 + 0.5 + 0.39 = 1.89
+  - IDCG@5 (nếu tất cả relevant ở top): 1/1 + 1/1.58 + 1/2 = 1 + 0.63 + 0.5 = 2.13
+  - NDCG@5 = 1.89 / 2.13 = 0.89
+- **Ý nghĩa:**
+  - Cao (0.7-1.0): Ranking tốt, relevant items ở top
+  - Trung bình (0.3-0.7): Relevant items ở giữa danh sách
+  - Thấp (<0.3): Relevant items ở cuối hoặc không có
+
+### 6. **Coverage (Ground Truth Coverage)**
+- **Định nghĩa:** Tỷ lệ items trong ground truth được recommend ít nhất 1 lần.
+- **Công thức:**
+      ```
+      Coverage = (Số items trong ground truth được recommend) / (Tổng số items trong ground truth) × 100%
+      ```
+- **Ví dụ:**
+  - Ground Truth có 1000 unique items
+  - Có 750 items được recommend ít nhất 1 lần
+  - Coverage = 750/1000 = 75%
+- **Ý nghĩa:**
+  - Cao (>70%): Hệ thống recommend được nhiều items khác nhau
+  - Trung bình (40-70%): Một số items không được recommend
+  - Thấp (<40%): Nhiều items không được recommend (có thể do cold-start hoặc bias)
+
+### 7. **Catalog Coverage**
+- **Định nghĩa:** Tỷ lệ unique items trong catalog được recommend.
+- **Công thức:**
+      ```
+      Catalog Coverage = (Số unique items được recommend) / (Tổng số items trong catalog) × 100%
+      ```
+- **Ví dụ:**
+  - Catalog có 10,000 posts
+  - Có 2,000 unique posts được recommend
+  - Catalog Coverage = 2000/10000 = 20%
+- **Ý nghĩa:**
+  - Cao (>30%): Hệ thống recommend đa dạng, không chỉ focus vào popular items
+  - Trung bình (10-30%): Có một số diversity
+  - Thấp (<10%): Hệ thống chỉ recommend một số items nhất định (có thể là popular items)
+
+### 8. **Diversity (Category Diversity)**
+- **Định nghĩa:** Độ đa dạng về categories trong recommendations của mỗi user.
+- **Công thức:**
+      ```
+      Category Diversity = (Số unique categories) / min(số recommendations, K)
+      ```
+- **Ví dụ:**
+  - Recommendations có 10 posts
+  - Posts thuộc 7 categories khác nhau
+  - Category Diversity = 7/10 = 0.7 (70%)
+- **Ý nghĩa:**
+  - Cao (>30%): Hệ thống recommend đa dạng, không chỉ focus vào popular items
+  - Trung bình (10-30%): Có một số diversity
+  - Thấp (<10%): Hệ thống chỉ recommend một số items nhất định (có thể là popular items)
+
+### 9. **Diversity (Author Diversity)**
+- **Định nghĩa:** Độ đa dạng về authors trong recommendations của mỗi user.
+- **Công thức:**
+      ```
+      Author Diversity = (Số unique authors) / min(số recommendations, K)
+      ```
+- **Ví dụ:**
+  - Recommendations có 10 posts
+  - Posts từ 5 authors khác nhau
+  - Author Diversity = 5/10 = 0.5 (50%)
+- **Ý nghĩa:**
+  - Cao (>60%): Hệ thống recommend đa dạng, không chỉ focus vào popular items
+  - Trung bình (30-60%): Có một số diversity
+  - Thấp (<30%): Recommendations tập trung vào một vài authors
+
+### 10. **Đánh giá kết quả**
+Trong phần đánh giá, em sử dụng offline evaluation với Top-K = 20, tập trung so sánh CBF, CF và mô hình Hybrid.
+
+Về accuracy, các chỉ số như Precision@20 và Recall@20 tương đối thấp. Tuy nhiên, điều này là phù hợp với mục tiêu discovery, vì hệ thống không tối ưu cá nhân hóa thuần mà ưu tiên khám phá nội dung mới.
+
+Khi xét các metric quan trọng hơn cho discovery, mô hình Hybrid cho kết quả nổi bật nhất. Cụ thể, Hybrid đạt Overall Diversity 67.63% và Category Diversity 35.26%, cao hơn CBF và tương đương hoặc tốt hơn CF, trong khi vẫn giữ mức relevance chấp nhận được.
+
+Kết quả này cho thấy mô hình Hybrid cân bằng tốt giữa relevance và exploration, giúp mở rộng long-tail và tránh lặp nội dung phổ biến. Do đó, hệ thống phù hợp để triển khai cho feed khám phá hoặc trending, nơi diversity và coverage quan trọng hơn accuracy tuyệt đối.
 
 ## Slide 16: Conclusion

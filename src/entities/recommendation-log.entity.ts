@@ -7,20 +7,20 @@ import { BaseEntity } from './base.entity' // Import BaseEntity của bạn
   collectionOptions: {
     changeStreamPreAndPostImages: { enabled: true },
   },
-  _id: false, // Kế thừa _id: string từ BaseEntity
+  _id: false,
 })
 export class RecommendationLog extends BaseEntity {
   @Prop({ ref: 'User', type: String, index: true })
   userId: string
 
   @Prop({ type: String, index: true })
-  source: string // 'hybrid', 'cbf', 'cf'
+  source: string
 
   @Prop({ type: [String], ref: 'Post' })
-  shownPostIds: string[] // Danh sách ID bài post đã hiển thị, THEO THỨ TỰ
+  shownPostIds: string[]
 
   @Prop({ type: String })
-  sessionId: string // ID duy nhất cho phiên đề xuất này
+  sessionId: string
 }
 
 export const RecommendationLogSchema = SchemaFactory.createForClass(RecommendationLog)

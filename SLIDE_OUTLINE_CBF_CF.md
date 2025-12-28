@@ -45,7 +45,7 @@ File này mô tả nội dung và cấu trúc của các slide về thuật toá
 
 #### Phần 3: Vector Similarity Search
 - Sử dụng Qdrant
-- Top 800 candidates
+- Top 100 candidates
 - Loại trừ: Posts của user, posts đã tương tác
 
 ### Visual Elements:

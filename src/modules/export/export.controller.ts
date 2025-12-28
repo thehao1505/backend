@@ -1,6 +1,5 @@
-// src/export/export.controller.ts
 import { Controller, Get, Logger, Res, UseGuards } from '@nestjs/common'
-import { Response } from 'express' // Import Response từ express
+import { Response } from 'express'
 import { ExportService } from './export.service'
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger'
 import { AuthGuard } from '@nestjs/passport'

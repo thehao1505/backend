@@ -24,27 +24,26 @@ export class RecommendationCommonService {
     public readonly redisService: RedisService,
   ) {}
 
-  /**
-   * Get cached recommendations from Redis
-   */
   public async _getCachedRecommendations(key: string) {
-    const cached = await this.redisService.client.get(key)
-    if (cached) {
-      return JSON.parse(cached)
+    try {
+      const cached = await this.redisService.client.get(key)
+      if (cached) {
+        return JSON.parse(cached)
+      }
+    } catch (error) {
+      this.logger.warn(`Error getting cache for key ${key}: ${error.message}`)
     }
     return null
   }
 
-  /**
-   * Cache recommendations to Redis
-   */
   public async _cacheRecommendations(key: string, recommendations: any) {
-    await this.redisService.client.setex(key, this.CACHE_TTL, JSON.stringify(recommendations))
+    try {
+      await this.redisService.client.setex(key, this.CACHE_TTL, JSON.stringify(recommendations))
+    } catch (error) {
+      this.logger.warn(`Error caching recommendations for key ${key}: ${error.message}`)
+    }
   }
 
-  /**
-   * Get post vector from Qdrant
-   */
   public async _getPostVector(postId: string): Promise<number[] | null> {
     try {
       const result = await this.qdrantService.getVectorById(configs.postCollectionName, postId)
@@ -55,10 +54,23 @@ export class RecommendationCommonService {
     }
   }
 
-  /**
-   * DUAL VECTOR STRATEGY: Get long-term interest vector (from persona)
-   * FIXED: Lấy từ userCollectionName với userId
-   */
+  public async _getPostVectorsBatch(postIds: string[]): Promise<Map<string, number[]>> {
+    if (postIds.length === 0) return new Map()
+    try {
+      const results = await this.qdrantService.getVectorsByIds(configs.postCollectionName, postIds)
+      const vectorMap = new Map<string, number[]>()
+      for (const result of results) {
+        if (result && Array.isArray(result.vector)) {
+          vectorMap.set(result.id.toString(), result.vector as number[])
+        }
+      }
+      return vectorMap
+    } catch (error) {
+      this.logger.warn(`Error batch retrieving post vectors: ${error.message}`)
+      return new Map()
+    }
+  }
+
   public async _getUserLongTermVector(userId: string): Promise<number[] | null> {
     try {
       const result = await this.qdrantService.getVectorById(configs.userCollectionName, userId)
@@ -73,10 +85,6 @@ export class RecommendationCommonService {
     }
   }
 
-  /**
-   * DUAL VECTOR STRATEGY: Get short-term preference vector (from interactions)
-   * FIXED: Lấy từ userShortTermCollectionName với userId (KHÔNG phải userId_shortterm)
-   */
   public async _getUserShortTermVector(userId: string): Promise<number[] | null> {
     try {
       const result = await this.qdrantService.getVectorById(configs.userShortTermCollectionName, userId)
@@ -91,30 +99,22 @@ export class RecommendationCommonService {
     }
   }
 
-  /**
-   * DUAL VECTOR STRATEGY: Get combined user interest vector với dynamic weights
-   * Fallback: Nếu không có dual vectors, dùng single vector (backward compatibility)
-   */
   public async _getUserInterestVector(userId: string): Promise<number[] | null> {
     const longTermVector = await this._getUserLongTermVector(userId)
     const shortTermVector = await this._getUserShortTermVector(userId)
 
-    // Nếu có cả 2 vectors -> Combine với dynamic weights
     if (longTermVector && shortTermVector) {
       return this._combineDualVectors(longTermVector, shortTermVector, userId)
     }
 
-    // Nếu chỉ có long-term
     if (longTermVector) {
       return longTermVector
     }
 
-    // Nếu chỉ có short-term
     if (shortTermVector) {
       return shortTermVector
     }
 
-    // Backward compatibility: Thử get single vector (old format)
     try {
       const result = await this.qdrantService.getVectorById(configs.userCollectionName, userId)
       if (!result || !Array.isArray(result.vector)) return null
@@ -124,46 +124,29 @@ export class RecommendationCommonService {
     }
   }
 
-  /**
-   * Combine long-term và short-term vectors với dynamic weights
-   */
   public async _combineDualVectors(longTermVector: number[], shortTermVector: number[], userId: string): Promise<number[]> {
-    // Get short-term interaction count để điều chỉnh weights
     let shortTermInteractionCount = 0
     try {
       const shortTermData = await this.qdrantService.getVectorById(configs.userShortTermCollectionName, userId)
       shortTermInteractionCount = (shortTermData?.payload as any)?.interaction_count || 0
-    } catch (error) {
-      // Ignore
-    }
+    } catch (error) {}
 
-    // Dynamic weights:
-    // - Nếu có nhiều interactions gần đây → tăng weight short-term
-    // - Nếu ít interactions → giữ long-term làm chủ đạo
-    let longTermWeight = 0.6 // Default: Long-term quan trọng hơn
+    let longTermWeight = 0.6
     let shortTermWeight = 0.4
 
     if (shortTermInteractionCount > 50) {
-      // Nhiều interactions -> Short-term quan trọng hơn
       longTermWeight = 0.4
       shortTermWeight = 0.6
     } else if (shortTermInteractionCount > 20) {
-      // Trung bình -> Cân bằng
       longTermWeight = 0.5
       shortTermWeight = 0.5
     }
-    // < 20 interactions -> Giữ default (long-term 60%, short-term 40%)
 
-    // Weighted combination
     const combined = longTermVector.map((val, i) => val * longTermWeight + shortTermVector[i] * shortTermWeight)
 
-    // Normalize về unit vector
     return VectorUtil.normalize(combined)
   }
 
-  /**
-   * Cosine Similarity giữa 2 vectors
-   */
   public _cosineSimilarity(vecA: number[], vecB: number[]): number {
     if (vecA.length !== vecB.length) return 0
 
@@ -181,9 +164,6 @@ export class RecommendationCommonService {
     return denominator === 0 ? 0 : dotProduct / denominator
   }
 
-  /**
-   * Áp dụng diversity filter để tránh quá nhiều posts từ cùng author/category
-   */
   public async _applyDiversityFilter(posts: Post[], limit: number): Promise<Post[]> {
     const diversePosts: Post[] = []
     const authorCount = new Map<string, number>()
@@ -198,13 +178,9 @@ export class RecommendationCommonService {
       const postCategories = post.categories || []
       const maxCategoryCount = Math.max(...postCategories.map(cat => categoryCount.get(cat) || 0), 0)
 
-      // Diversity rules: Cải thiện để balance giữa relevance và diversity
-      // - Tối đa 3 posts từ cùng author trong top 10 (tăng từ 2)
-      // - Tối đa 4 posts từ cùng category trong top 10 (tăng từ 3)
-      // Giảm diversity constraint một chút để giữ lại posts có score cao
       const isTop10 = diversePosts.length < 10
-      const authorLimit = isTop10 ? 3 : 4 // Tăng từ 2:3
-      const categoryLimit = isTop10 ? 4 : 6 // Tăng từ 3:5
+      const authorLimit = isTop10 ? 3 : 4
+      const categoryLimit = isTop10 ? 4 : 6
 
       if (authorPosts < authorLimit && maxCategoryCount < categoryLimit) {
         diversePosts.push(post)
@@ -215,7 +191,6 @@ export class RecommendationCommonService {
       }
     }
 
-    // Nếu chưa đủ, thêm các posts còn lại
     if (diversePosts.length < limit) {
       for (const post of posts) {
         if (diversePosts.length >= limit) break
@@ -228,20 +203,23 @@ export class RecommendationCommonService {
     return diversePosts
   }
 
-  /**
-   * Get diverse posts by author (round-robin)
-   */
+  public _addSourceToPosts(posts: Post[], source: string): (Post & { source: string })[] {
+    return posts.map(post => ({
+      ...post,
+      source,
+    })) as (Post & { source: string })[]
+  }
+
   public async _getDiversePostsByAuthor(posts: Post[], limit: number): Promise<Post[]> {
     const authorGroups = new Map<string, Post[]>()
     posts.forEach(post => {
-      // Handle both populated and non-populated author field
       let authorId: string
       if (typeof post.author === 'string') {
         authorId = post.author
       } else if (post.author && typeof post.author === 'object' && '_id' in post.author) {
         authorId = (post.author as any)._id.toString()
       } else {
-        return // Skip if no author
+        return
       }
 
       if (!authorGroups.has(authorId)) {
@@ -255,36 +233,26 @@ export class RecommendationCommonService {
     let postCount = posts.length
 
     while (diversePosts.length < limit && postCount > 0) {
-      // Chọn tác giả theo vòng tròn (round-robin) thay vì random
       for (const authorId of authors) {
         if (diversePosts.length >= limit) break
         const authorPosts = authorGroups.get(authorId)
         if (authorPosts && authorPosts.length > 0) {
-          diversePosts.push(authorPosts.shift()) // Lấy bài đăng đầu tiên
+          diversePosts.push(authorPosts.shift())
           postCount--
         }
       }
-      // Dừng nếu không còn post nào
       if (postCount === 0 || postCount === posts.length) break
     }
     return diversePosts
   }
 
-  /**
-   * Calculate time decay score
-   */
   public _calculateTimeDecayScore(post: Post): number {
     const now = new Date()
     const postDate = new Date(post.createdAt)
     const hoursDiff = (now.getTime() - postDate.getTime()) / (1000 * 60 * 60)
-    // Cải thiện: Giảm time decay để không penalize posts cũ quá nhiều
-    // Thay đổi từ 14 ngày lên 21 ngày (chậm hơn 50%)
     return Math.exp(-hoursDiff / (21 * 24))
   }
 
-  /**
-   * Get interaction weight
-   */
   public _getInteractionWeight(type: string): number {
     const weights: Record<string, number> = {
       [UserActivityType.LIKE]: 0.2,
@@ -296,9 +264,6 @@ export class RecommendationCommonService {
     return weights[type] || 0.1
   }
 
-  /**
-   * Get recency weight (for similarity calculation)
-   */
   public _getRecencyWeight(daysAgo: number): number {
     if (daysAgo <= 7) return 1.0
     if (daysAgo <= 14) return 0.8
@@ -307,9 +272,6 @@ export class RecommendationCommonService {
     return 0.2
   }
 
-  /**
-   * Get recency decay (for recency score)
-   */
   public _getRecencyDecay(daysAgo: number): number {
     if (daysAgo <= 1) return 1.0
     if (daysAgo <= 7) return 0.8
@@ -335,7 +297,7 @@ export class RecommendationCommonService {
 
     const shuffledPosts = popularPosts.sort(() => 0.5 - Math.random())
     return {
-      items: shuffledPosts,
+      items: this._addSourceToPosts(shuffledPosts, 'popular'),
       total,
       page,
       limit,
@@ -343,12 +305,7 @@ export class RecommendationCommonService {
     }
   }
 
-  /**
-   * Get popular posts
-   */
   public async _getPopularPosts(limit: number): Promise<Post[]> {
-    // Lấy top posts có nhiều tương tác nhất (toàn bộ dataset)
-    // Không giới hạn thời gian để phù hợp với offline evaluation
     const popularPosts = await this.postModel.aggregate([
       {
         $match: {
@@ -409,12 +366,9 @@ export class RecommendationCommonService {
       },
     ])
 
-    return popularPosts
+    return this._addSourceToPosts(popularPosts, 'popular')
   }
 
-  /**
-   * Interleave two lists
-   */
   public _interleaveList(listA: Post[], listB: Post[]) {
     const merged: Post[] = []
     const addedIds = new Set<string>()
@@ -440,9 +394,6 @@ export class RecommendationCommonService {
     return merged
   }
 
-  /**
-   * Interleave three lists
-   */
   public _interleaveListThree(listA: Post[], listB: Post[], listC: Post[]): Post[] {
     const merged: Post[] = []
     const addedIds = new Set<string>()
@@ -476,49 +427,34 @@ export class RecommendationCommonService {
     return merged
   }
 
-  /**
-   * Log recommendations
-   */
   public async _logRecommendations(userId: string, source: string, items: Post[]): Promise<void> {
     try {
-      // Chỉ log nếu có items
       if (!items || items.length === 0) {
         return
       }
 
-      // Lấy danh sách ID
       const postIds = items.map(post => post._id.toString())
 
       const log = new this.recommendationLogModel({
-        _id: uuidv4(), // Schema BaseEntity của bạn dùng uuid
+        _id: uuidv4(),
         userId: userId,
         source: source,
         shownPostIds: postIds,
-        sessionId: uuidv4(), // Một ID duy nhất cho phiên đề xuất này
+        sessionId: uuidv4(),
       })
 
-      // Lưu vào DB.
-      // Chúng ta không `await` ở hàm gọi để không block response trả về user.
       await log.save()
 
-      // Export ra CSV (async, không block)
       this._exportRecommendationToCsv(userId, source, postIds).catch(err => {
         this.logger.warn(`[CSV Export] Lỗi khi export CSV: ${err.message}`)
       })
     } catch (error) {
-      // Quan trọng: Bắt lỗi ở đây để không làm crash hàm recommendation chính
       this.logger.error(`[Metrics] Lỗi khi ghi log recommendations: ${error.message}`)
     }
   }
 
-  /**
-   * Export recommendation log ra CSV file
-   * Format: userId,postIds,source
-   * postIds được phân cách bằng |
-   */
   public async _exportRecommendationToCsv(userId: string, source: string, postIds: string[]): Promise<void> {
     try {
-      // Tạo thư mục nếu chưa có
       if (!fs.existsSync(this.CSV_EXPORT_PATH)) {
         fs.mkdirSync(this.CSV_EXPORT_PATH, { recursive: true })
       }
@@ -526,17 +462,14 @@ export class RecommendationCommonService {
       const csvFileName = `recommendations_${source}.csv`
       const csvFilePath = path.join(this.CSV_EXPORT_PATH, csvFileName)
 
-      // Kiểm tra xem file đã tồn tại chưa để quyết định có cần ghi header không
       const fileExists = fs.existsSync(csvFilePath)
-      const fileHandle = fs.openSync(csvFilePath, 'a') // Append mode
+      const fileHandle = fs.openSync(csvFilePath, 'a')
 
       try {
-        // Ghi header nếu file mới tạo
         if (!fileExists) {
           fs.writeSync(fileHandle, 'userId,postIds,source\n')
         }
 
-        // Ghi dòng dữ liệu mới
         const postIdsStr = postIds.join('|')
         const csvLine = `${userId},${postIdsStr},${source}\n`
         fs.writeSync(fileHandle, csvLine)
@@ -544,7 +477,6 @@ export class RecommendationCommonService {
         fs.closeSync(fileHandle)
       }
     } catch (error) {
-      // Log lỗi nhưng không throw để không ảnh hưởng đến flow chính
       this.logger.warn(`[CSV Export] Không thể export recommendation ra CSV: ${error.message}`)
     }
   }

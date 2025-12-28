@@ -68,10 +68,9 @@ export class RecommendationService {
   async getSimilarPosts(postId: string, query: QueryRecommendationDto) {
     const { page, limit } = query
     try {
-      const post = await this.postModel.findById(postId).lean()
-      if (!post) throw new BadRequestException('Post not found')
+      const [post, postVector] = await Promise.all([this.postModel.findById(postId).lean(), this.commonService._getPostVector(postId)])
 
-      const postVector = await this.commonService._getPostVector(postId)
+      if (!post) throw new BadRequestException('Post not found')
       if (!postVector) {
         throw new BadRequestException('Post vector not found')
       }
@@ -82,7 +81,7 @@ export class RecommendationService {
 
       const similar = await this.qdrantService.searchSimilar(configs.postCollectionName, postVector, Number(limit), Number(page), filter)
 
-      const similarPostIds = similar.map(item => item.id).filter(id => id !== postId)
+      const similarPostIds = similar.map(item => item.id.toString()).filter(id => id !== postId.toString())
       const total = similarPostIds.length
 
       const similarPostsRaw = await this.postModel
@@ -91,10 +90,10 @@ export class RecommendationService {
         .lean()
 
       const idToPostMap = new Map(similarPostsRaw.map(post => [post._id.toString(), post]))
-      const similarPosts = similarPostIds.map(id => idToPostMap.get(id.toString())).filter(Boolean)
+      const similarPosts = similarPostIds.map(id => idToPostMap.get(id)).filter(Boolean)
 
       return {
-        items: similarPosts,
+        items: this.commonService._addSourceToPosts(similarPosts, 'similar'),
         total,
         page,
         limit,
@@ -144,7 +143,7 @@ export class RecommendationService {
       const diversePosts = await this.commonService._getDiversePostsByAuthor(followingPosts, limit)
 
       return {
-        items: diversePosts,
+        items: this.commonService._addSourceToPosts(diversePosts, 'following'),
         total: totalFollowingPosts,
         page,
         limit,
@@ -161,36 +160,36 @@ export class RecommendationService {
     const embedding = await this.embeddingService.generateEmbedding(text)
     const normalizedEmbedding = VectorUtil.normalize(embedding)
 
-    if (text) {
-      await this.postService.searchActivity(text, userId, normalizedEmbedding)
-    }
+    const [similar, users] = await Promise.all([
+      this.qdrantService.searchSimilar(configs.postCollectionName, normalizedEmbedding, Number(limit), Number(page), {}),
+      text
+        ? this.userModel
+            .find({ $text: { $search: text } })
+            .select('avatar username fullName')
+            .skip((Number(page) - 1) * Number(limit))
+            .limit(Number(limit))
+            .sort({ score: { $meta: 'textScore' } })
+            .lean()
+        : Promise.resolve([]),
+    ])
 
-    // Search for posts using vector search
-    const similar = await this.qdrantService.searchSimilar(configs.postCollectionName, normalizedEmbedding, Number(limit), Number(page), {})
-
-    const similarPostIds = similar.map(item => item.id)
+    const similarPostIds = similar.map(item => item.id.toString())
     const similarPostsRaw = await this.postModel
       .find({ _id: { $in: similarPostIds }, isHidden: false, parentId: null, isReply: false })
       .populate('author', 'username avatar fullName')
       .lean()
 
     const idToPostMap = new Map(similarPostsRaw.map(post => [post._id.toString(), post]))
-    const similarPosts = similarPostIds.map(id => idToPostMap.get(id.toString())).filter(Boolean)
+    const similarPosts = similarPostIds.map(id => idToPostMap.get(id)).filter(Boolean)
 
-    // Search for users using fulltext search
-    const skip = (Number(page) - 1) * Number(limit)
-    const users = text
-      ? await this.userModel
-          .find({ $text: { $search: text } })
-          .select('avatar username fullName')
-          .skip(skip)
-          .limit(Number(limit))
-          .sort({ score: { $meta: 'textScore' } })
-          .lean()
-      : []
+    if (text) {
+      this.postService.searchActivity(text, userId, normalizedEmbedding).catch(err => {
+        this.logger.warn(`Error logging search activity: ${err.message}`)
+      })
+    }
 
     return {
-      similarPosts,
+      similarPosts: this.commonService._addSourceToPosts(similarPosts, 'search'),
       users,
     }
   }

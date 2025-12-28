@@ -14,9 +14,6 @@ const TEST_INTERACTIONS_FILE = path.join(DATA_PATH, 'test_interactions.csv')
 const SOURCE_TO_EVALUATE = SEEDER_CONFIG.SOURCE || 'hybrid'
 const K = SEEDER_CONFIG.K || 10
 
-/**
- * Helper tính P@K, R@K, AP@K, NDCG@K
- */
 function calculateUserMetrics(
   recommendations: string[],
   groundTruth: Set<string>,
@@ -41,8 +38,6 @@ function calculateUserMetrics(
       precisionSum += precision_at_k_plus_1
     }
 
-    // NDCG: relevance score = 1 if relevant, 0 otherwise
-    // DCG = sum(relevance / log2(position + 1))
     dcg += isRelevant / Math.log2(k + 2)
   }
 
@@ -52,7 +47,6 @@ function calculateUserMetrics(
   const r_at_k = hits / totalRelevantItems
   const ap_at_k = precisionSum / totalRelevantItems
 
-  // Ideal DCG: giả sử tất cả relevant items ở top
   let idcg = 0
   for (let i = 0; i < Math.min(totalRelevantItems, K); i++) {
     idcg += 1 / Math.log2(i + 2)
@@ -62,9 +56,6 @@ function calculateUserMetrics(
   return { p_at_k, r_at_k, ap_at_k, ndcg_at_k }
 }
 
-/**
- * Helper đọc "đáp án" (ground truth)
- */
 async function loadGroundTruth(): Promise<Map<string, Set<string>>> {
   const truthMap = new Map<string, Set<string>>()
 
@@ -98,7 +89,6 @@ async function bootstrap() {
   logger.log(`=== Bắt đầu đánh giá (Evaluate) @ K=${K} cho feed '${SOURCE_TO_EVALUATE}' ===`)
 
   try {
-    // 1. Đọc "Đáp án" (Ground Truth)
     logger.log('Đang load ground truth từ test_interactions.csv...')
     const groundTruthMap = await loadGroundTruth()
     logger.log(`Đã tải ${groundTruthMap.size} users từ file test (ground truth).`)
@@ -107,7 +97,6 @@ async function bootstrap() {
       throw new Error('Không có ground truth nào. Hãy chạy generate_offline_eval_data.ts trước.')
     }
 
-    // 2. Đọc "Dự đoán" (Predictions)
     logger.log(`Đang load predictions từ RecommendationLog với source='${SOURCE_TO_EVALUATE}'...`)
     const logs = await recLogModel.find({ source: SOURCE_TO_EVALUATE }).lean()
 
@@ -116,7 +105,6 @@ async function bootstrap() {
     }
     logger.log(`Đã tải ${logs.length} dự đoán từ RecommendationLog.`)
 
-    // Debug: Kiểm tra một vài recommendations và ground truth
     if (logs.length > 0) {
       const sampleLog = logs.find(l => l.shownPostIds && l.shownPostIds.length > 0) || logs[0]
       const sampleUserId = sampleLog.userId.toString()
@@ -133,7 +121,6 @@ async function bootstrap() {
         logger.log(`  Ground Truth (first 5): ${Array.from(sampleTruth).slice(0, 5).join(', ')}`)
       }
 
-      // Kiểm tra format ID
       if (samplePredictions.length > 0 && sampleTruth.size > 0) {
         const firstPred = samplePredictions[0]
         const firstTruth = Array.from(sampleTruth)[0]
@@ -143,7 +130,6 @@ async function bootstrap() {
         logger.log(`  Direct match test: ${sampleTruth.has(firstPred)}`)
       }
 
-      // Đếm số logs rỗng
       const emptyLogs = logs.filter(l => !l.shownPostIds || l.shownPostIds.length === 0).length
       logger.log(`  Logs rỗng (không có recommendations): ${emptyLogs}/${logs.length}`)
     }
@@ -155,16 +141,14 @@ async function bootstrap() {
       ndcgAtK: [] as number[],
     }
 
-    // Metrics mới: Coverage, Diversity, Novelty
     const allRecommendedPostIds = new Set<string>()
     const allGroundTruthPostIds = new Set<string>()
-    const userCategoryDiversity: number[] = [] // Diversity score cho mỗi user
-    const userAuthorDiversity: number[] = [] // Author diversity cho mỗi user
+    const userCategoryDiversity: number[] = []
+    const userAuthorDiversity: number[] = []
 
     let usersWithHits = 0
     let usersEvaluated = 0
 
-    // Load post details để tính diversity (cần categories và authors)
     const postModel = app.get<Model<Post>>(getModelToken(Post.name))
     const allPostIds = new Set<string>()
     logs.forEach(log => {
@@ -185,7 +169,6 @@ async function bootstrap() {
       })
     }
 
-    // 3. So sánh
     const zeroPrecisionUsers: Array<{ userId: string; predictions: string[]; truth: string[]; overlap: number }> = []
 
     for (const log of logs) {
@@ -193,14 +176,12 @@ async function bootstrap() {
       const predictions = log.shownPostIds.map(id => id.toString())
       const truth = groundTruthMap.get(userId) || new Set<string>()
 
-      // Chỉ đánh giá user có trong bộ test
       if (truth.size === 0) {
         continue
       }
 
       usersEvaluated++
 
-      // Debug: Track users với zero precision để phân tích
       const overlap = predictions.filter(p => truth.has(p)).length
       if (overlap === 0 && zeroPrecisionUsers.length < 5) {
         zeroPrecisionUsers.push({
@@ -211,11 +192,9 @@ async function bootstrap() {
         })
       }
 
-      // Tính coverage: thêm tất cả recommended posts
       predictions.forEach(postId => allRecommendedPostIds.add(postId))
       truth.forEach(postId => allGroundTruthPostIds.add(postId))
 
-      // Tính diversity cho user này
       const categories = new Set<string>()
       const authors = new Set<string>()
       predictions.forEach(postId => {
@@ -230,9 +209,8 @@ async function bootstrap() {
         }
       })
 
-      // Diversity = số unique categories / số posts (normalized)
-      const categoryDiversity = predictions.length > 0 ? categories.size / Math.min(predictions.length, 10) : 0
-      const authorDiversity = predictions.length > 0 ? authors.size / Math.min(predictions.length, 10) : 0
+      const categoryDiversity = predictions.length > 0 ? categories.size / Math.min(predictions.length, SEEDER_CONFIG.K) : 0
+      const authorDiversity = predictions.length > 0 ? authors.size / Math.min(predictions.length, SEEDER_CONFIG.K) : 0
       userCategoryDiversity.push(categoryDiversity)
       userAuthorDiversity.push(authorDiversity)
 
@@ -252,7 +230,6 @@ async function bootstrap() {
       }
     }
 
-    // 4. Tính trung bình
     if (usersEvaluated === 0) {
       throw new Error('Không có user nào trong log khớp với ground truth.')
     }
@@ -264,7 +241,6 @@ async function bootstrap() {
     const MAP = mean(metrics.averagePrecisionAtK)
     const meanNDCG = mean(metrics.ndcgAtK)
 
-    // Thống kê thêm
     const avgGroundTruthSize =
       groundTruthMap.size > 0 ? Array.from(groundTruthMap.values()).reduce((sum, set) => sum + set.size, 0) / groundTruthMap.size : 0
 
@@ -283,17 +259,14 @@ async function bootstrap() {
     logger.log(`MAP@${K}:                     ${(MAP * 100).toFixed(4)}%`)
     logger.log(`Mean NDCG@${K}:                ${(meanNDCG * 100).toFixed(4)}%`)
 
-    // Tính Coverage: % posts trong ground truth được recommend ít nhất 1 lần
     const coverage =
       allGroundTruthPostIds.size > 0
         ? (Array.from(allGroundTruthPostIds).filter(id => allRecommendedPostIds.has(id)).length / allGroundTruthPostIds.size) * 100
         : 0
 
-    // Tính Catalog Coverage: % unique posts được recommend
     const totalPostsInCatalog = allPostIds.size
     const catalogCoverage = totalPostsInCatalog > 0 ? (allRecommendedPostIds.size / totalPostsInCatalog) * 100 : 0
 
-    // Tính Diversity: trung bình diversity scores
     const meanCategoryDiversity = mean(userCategoryDiversity)
     const meanAuthorDiversity = mean(userAuthorDiversity)
     const meanDiversity = (meanCategoryDiversity + meanAuthorDiversity) / 2
@@ -306,7 +279,6 @@ async function bootstrap() {
     logger.log(`Mean Author Diversity:         ${(meanAuthorDiversity * 100).toFixed(4)}%`)
     logger.log(`Mean Overall Diversity:        ${(meanDiversity * 100).toFixed(4)}%`)
 
-    // Phân tích chi tiết hơn
     const precisionDistribution = {
       zero: metrics.precisionAtK.filter(p => p === 0).length,
       low: metrics.precisionAtK.filter(p => p > 0 && p < 0.1).length,
@@ -322,7 +294,6 @@ async function bootstrap() {
     )
     logger.log(`  High (>30%):    ${precisionDistribution.high} (${((precisionDistribution.high / usersEvaluated) * 100).toFixed(2)}%)`)
 
-    // Phân tích theo số lượng ground truth
     const usersByGTSize = {
       small: 0, // 1-2 items
       medium: 0, // 3-5 items
@@ -344,7 +315,6 @@ async function bootstrap() {
     logger.log(`  Medium (3-5):   ${usersByGTSize.medium}`)
     logger.log(`  Large (>5):     ${usersByGTSize.large}`)
 
-    // Debug: Hiển thị sample users với zero precision
     if (zeroPrecisionUsers.length > 0) {
       logger.log('\n--- 🔍 DEBUG: Sample Users với Zero Precision ---')
       for (const user of zeroPrecisionUsers.slice(0, 3)) {

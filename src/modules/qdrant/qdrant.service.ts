@@ -29,7 +29,6 @@ export class QdrantService implements OnModuleInit {
       })
       this.logger.log(`Đã tạo collection ${collectionName} thành công.`)
     } catch (error) {
-      // Bắt lỗi nếu collection đã tồn tại
       if (error.message && error.message.includes('AlreadyExists')) {
         this.logger.warn(`Collection ${collectionName} đã tồn tại. Bỏ qua.`)
         return
@@ -154,6 +153,21 @@ export class QdrantService implements OnModuleInit {
     } catch (error) {
       this.logger.error(`Error retrieving vector ${id} from ${collectionName}: ${error.message}`)
       throw error
+    }
+  }
+
+  async getVectorsByIds(collectionName: string, ids: string[]) {
+    if (ids.length === 0) return []
+    try {
+      const results = await this.client.retrieve(collectionName, {
+        ids,
+        with_vector: true,
+        with_payload: true,
+      })
+      return results || []
+    } catch (error) {
+      this.logger.error(`Error retrieving vectors from ${collectionName}: ${error.message}`)
+      return []
     }
   }
 

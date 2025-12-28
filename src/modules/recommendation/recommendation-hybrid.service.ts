@@ -29,30 +29,27 @@ export class RecommendationHybridService {
 
     try {
       const cached = await this.commonService._getCachedRecommendations(cacheKey)
-      if (cached && !(configs.isSkipCacheRecommendation === 'true')) return cached
+      if (cached && configs.isSkipCacheRecommendation !== 'true') return cached
 
-      // Get candidates from both CBF and CF
-      const cbfPool = await this.cbfService.getCBFCandidates(userId, this.HYBRID_POOL_LIMIT)
-      const cfPool = await this.cfService.getCFCandidatesAsPost(userId, this.HYBRID_POOL_LIMIT)
-      const popularPool = await this.commonService._getPopularPosts(this.HYBRID_POOL_LIMIT) // Lấy pool lớn hơn để có đủ diversity
+      const [cbfPool, cfPool, popularPool] = await Promise.all([
+        this.cbfService.getCBFCandidates(userId, this.HYBRID_POOL_LIMIT),
+        this.cfService.getCFCandidatesAsPost(userId, this.HYBRID_POOL_LIMIT),
+        this.commonService._getPopularPosts(this.HYBRID_POOL_LIMIT),
+      ])
 
       if (cbfPool.length === 0 && cfPool.length === 0 && popularPool.length === 0) {
         this.logger.log(`[Hybrid] Cold-start cho user ${userId}, fallback to popular post`)
         return this.commonService._getFallbackPopularPosts(query)
       }
 
-      // Cải thiện: Dynamic interleaving weights dựa trên quality của từng pool
-      // Nếu một pool có nhiều items hơn, có thể có chất lượng tốt hơn
       const cbfWeight = cbfPool.length > 0 ? Math.min(cbfPool.length / 50, 1.0) : 0
       const cfWeight = cfPool.length > 0 ? Math.min(cfPool.length / 50, 1.0) : 0
-      const totalWeight = cbfWeight + cfWeight + 0.2 // Popular pool luôn có weight 0.2
+      const totalWeight = cbfWeight + cfWeight + 0.2
 
-      // Normalize weights
       const normalizedCbfWeight = totalWeight > 0 ? cbfWeight / totalWeight : 0.4
       const normalizedCfWeight = totalWeight > 0 ? cfWeight / totalWeight : 0.4
       const normalizedPopularWeight = totalWeight > 0 ? 0.2 / totalWeight : 0.2
 
-      // Interleave với dynamic weights: CBF, CF, Popular theo tỷ lệ
       const mergedList = this._interleaveWithWeights(
         cbfPool,
         cfPool,
@@ -60,6 +57,9 @@ export class RecommendationHybridService {
         normalizedCbfWeight,
         normalizedCfWeight,
         normalizedPopularWeight,
+        'cbf',
+        'cf',
+        'popular',
       )
 
       const diverseList = await this.commonService._getDiversePostsByAuthor(mergedList, mergedList.length)
@@ -87,33 +87,35 @@ export class RecommendationHybridService {
     }
   }
 
-  /**
-   * Interleave three lists với dynamic weights
-   * Cải thiện: Thay vì round-robin đơn giản, sử dụng weighted interleaving
-   */
-  private _interleaveWithWeights(listA: Post[], listB: Post[], listC: Post[], weightA: number, weightB: number, weightC: number): Post[] {
+  private _interleaveWithWeights(
+    listA: Post[],
+    listB: Post[],
+    listC: Post[],
+    weightA: number,
+    weightB: number,
+    weightC: number,
+    sourceA: string = 'cbf',
+    sourceB: string = 'cf',
+    sourceC: string = 'popular',
+  ): Post[] {
     const merged: Post[] = []
     const addedIds = new Set<string>()
 
-    // Tính số items cần lấy từ mỗi list dựa trên weights
     const totalItems = Math.max(listA.length, listB.length, listC.length, 100)
     const countA = Math.floor(totalItems * weightA)
     const countB = Math.floor(totalItems * weightB)
     const countC = Math.floor(totalItems * weightC)
 
-    // Lấy items từ mỗi list theo weights
-    const itemsA = listA.slice(0, countA)
-    const itemsB = listB.slice(0, countB)
-    const itemsC = listC.slice(0, countC)
+    const itemsA = this.commonService._addSourceToPosts(listA.slice(0, countA), sourceA)
+    const itemsB = this.commonService._addSourceToPosts(listB.slice(0, countB), sourceB)
+    const itemsC = this.commonService._addSourceToPosts(listC.slice(0, countC), sourceC)
 
-    // Interleave theo round-robin nhưng ưu tiên list có weight cao hơn
     let i = 0,
       j = 0,
       k = 0
     const maxLength = Math.max(itemsA.length, itemsB.length, itemsC.length)
 
     while (i < itemsA.length || j < itemsB.length || k < itemsC.length) {
-      // Priority: A > B > C nếu weights bằng nhau, nhưng điều chỉnh theo weights
       if (i < itemsA.length && (weightA >= weightB || j >= itemsB.length) && (weightA >= weightC || k >= itemsC.length)) {
         const post = itemsA[i++]
         if (!addedIds.has(post._id.toString())) {

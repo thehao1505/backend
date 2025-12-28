@@ -75,10 +75,8 @@ export class UserService {
       throw new NotFoundException('User not found')
     }
 
-    // DUAL VECTOR STRATEGY: Nếu persona thay đổi, refresh long-term vector
     if (updateUserDto.persona && Array.isArray(updateUserDto.persona) && updateUserDto.persona.length > 0) {
       this.logger.log(`Persona updated for user ${id}, refreshing long-term vector...`)
-      // Enqueue refresh job (không block response)
       this.refreshUserLongTermVector(id).catch(error => {
         this.logger.error(`Failed to refresh long-term vector for user ${id}: ${error.message}`)
       })
@@ -114,8 +112,6 @@ export class UserService {
 
     const follow = new this.userFollowModel({ followerId, followingId })
 
-    // Cập nhật tất cả đồng thời để đảm bảo đồng bộ
-    // Promise.all thực hiện các tác vụ song song
     await Promise.all([
       follow.save(),
       this.notificationService.createNotification({
@@ -281,7 +277,6 @@ export class UserService {
   @Cron(CronExpression.EVERY_DAY_AT_MIDNIGHT)
   async syncUserFollowData() {
     try {
-      // Sync follower counts and followers array
       const followerPipeline = [
         {
           $group: {
@@ -301,7 +296,6 @@ export class UserService {
       ]
       await this.userFollowModel.aggregate(followerPipeline as any[]).exec()
 
-      // Sync following counts and followings array
       const followingPipeline = [
         {
           $group: {
@@ -321,11 +315,9 @@ export class UserService {
       ]
       await this.userFollowModel.aggregate(followingPipeline as any[]).exec()
 
-      // Set default values for users without followers/followings
       await this.userModel.updateMany({ followerCount: { $exists: false } }, { $set: { followerCount: 0, followers: [] } })
       await this.userModel.updateMany({ followingCount: { $exists: false } }, { $set: { followingCount: 0, followings: [] } })
 
-      // Clear arrays for users who have counts but no actual relationships
       await this.userModel.updateMany({ followerCount: 0, followers: { $exists: true, $ne: [] } }, { $set: { followers: [] } })
       await this.userModel.updateMany({ followingCount: 0, followings: { $exists: true, $ne: [] } }, { $set: { followings: [] } })
 

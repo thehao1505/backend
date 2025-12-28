@@ -87,7 +87,6 @@ export class PostService {
       },
     ]
     try {
-      // Initialize likes field for posts that don't have it yet
       await this.postModel.updateMany({ likes: { $exists: false } }, { $set: { likes: [] } })
 
       await this.userActivityModel.aggregate(pipeline as any[]).exec()

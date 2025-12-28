@@ -25,7 +25,7 @@ export class RecommendationCfService {
 
     try {
       const cached = await this.commonService._getCachedRecommendations(cacheKey)
-      if (cached && configs.isSkipCacheRecommendation === 'true') return cached
+      if (cached && configs.isSkipCacheRecommendation !== 'true') return cached
 
       const cfPool = await this.getCFCandidatesAsPost(userId, this.HYBRID_POOL_LIMIT)
 
@@ -38,7 +38,7 @@ export class RecommendationCfService {
       const items = cfPool.slice((page - 1) * limit, page * limit)
 
       const recommendations = {
-        items,
+        items: this.commonService._addSourceToPosts(items, 'cf'),
         total,
         page,
         limit,
@@ -57,19 +57,13 @@ export class RecommendationCfService {
     }
   }
 
-  /**
-   * CF Strategy mới: Multi-signal approach với weighted similarity và quality scoring
-   * Kết hợp: User Similarity, Interaction Quality, Recency, Popularity Boost
-   */
   async getCFCandidatesAsPost(userId: string, poolLimit: number) {
-    // 1. Lấy High Intent Interactions của user
     const myInteractions = await this._getHighIntentInteractionWithDetails(userId)
     if (myInteractions.length === 0) {
       this.logger.log(`[CF] User ${userId} không có high intent interactions`)
       return []
     }
 
-    // 2. Tìm Similar Users với weighted Jaccard similarity
     const similarUsers = await this._getSimilarUsersWeighted(userId, myInteractions)
     if (similarUsers.length === 0) {
       this.logger.log(`[CF] User ${userId} không tìm thấy similar users (${myInteractions.length} interactions)`)
@@ -78,9 +72,7 @@ export class RecommendationCfService {
 
     this.logger.debug(`[CF] User ${userId} tìm thấy ${similarUsers.length} similar users`)
 
-    // 3. Lấy candidate posts từ similar users (mở rộng pool để có đủ diversity)
-    // Tăng pool size để có nhiều candidates hơn, cải thiện recall
-    const expandedPoolLimit = Math.min(poolLimit * 5, 500) // Tăng từ 300 lên 500
+    const expandedPoolLimit = Math.min(poolLimit * 5, 500)
     const candidatePosts = await this._getCFCandidatesWithDetails(
       similarUsers,
       myInteractions.map(i => i.postId),
@@ -89,21 +81,15 @@ export class RecommendationCfService {
 
     if (candidatePosts.length === 0) return []
 
-    // 4. Score mỗi post với multi-signal formula
-    const scoredPosts = await Promise.all(
-      candidatePosts.map(async candidate => {
-        const scores = await this._calculateCFScore(candidate.post, candidate.interactions, similarUsers, myInteractions)
-        return { ...candidate.post, score: scores.finalScore, scoreDetails: scores }
-      }),
-    )
+    const scoredPosts = candidatePosts.map(candidate => {
+      const scores = this._calculateCFScore(candidate.post, candidate.interactions, similarUsers, myInteractions)
+      return { ...candidate.post, score: scores.finalScore, scoreDetails: scores }
+    })
 
-    // 5. Sort và apply diversity
     scoredPosts.sort((a, b) => b.score - a.score)
-    // Extract posts từ scored posts để pass vào diversity filter
     const postsForDiversity = scoredPosts.map(sp => sp as any as Post)
     const diversePosts = await this.commonService._applyDiversityFilter(postsForDiversity, poolLimit)
 
-    // Map lại để giữ score và scoreDetails
     const diverseScoredPosts = diversePosts.map(post => {
       const scored = scoredPosts.find(sp => sp._id.toString() === post._id.toString())
       return scored || (post as any)
@@ -112,15 +98,10 @@ export class RecommendationCfService {
     return diverseScoredPosts
   }
 
-  /**
-   * Tính similarity giữa users với weighted Jaccard similarity
-   * Cải tiến: Sử dụng interaction weights và recency weights
-   */
   private async _getSimilarUsersWeighted(userId: string, myInteractions: Array<{ postId: string; type: string; createdAt: Date }>) {
     const myPostIds = myInteractions.map(i => i.postId)
     const now = new Date()
 
-    // Tính weighted sum cho my interactions
     const myWeightedSum = myInteractions.reduce((sum, interaction) => {
       const interactionWeight = this.commonService._getInteractionWeight(interaction.type)
       const daysAgo = (now.getTime() - new Date(interaction.createdAt).getTime()) / (1000 * 60 * 60 * 24)
@@ -128,7 +109,6 @@ export class RecommendationCfService {
       return sum + interactionWeight * recencyWeight
     }, 0)
 
-    // Lấy activities từ similar users
     const activityAgg = this.userActivityModel.aggregate([
       {
         $match: {
@@ -160,7 +140,6 @@ export class RecommendationCfService {
       },
     ])
 
-    // Lấy replies từ similar users
     const replyAgg = this.commonService.postModel.aggregate([
       {
         $match: {
@@ -179,7 +158,6 @@ export class RecommendationCfService {
 
     const [activityUsers, replyUsers] = await Promise.all([activityAgg, replyAgg])
 
-    // Group by user và tính weighted intersection
     const userOverlaps = new Map<string, Array<{ postId: string; type: string; createdAt: Date }>>()
 
     activityUsers.forEach(activity => {
@@ -206,11 +184,9 @@ export class RecommendationCfService {
       })
     })
 
-    // Tính weighted similarity cho mỗi user
     const similarUsers: Array<{ userId: string; similarity: number; overlapCount: number }> = []
 
     for (const [similarUserId, overlaps] of userOverlaps.entries()) {
-      // Weighted intersection
       let weightedIntersection = 0
       const myInteractionMap = new Map(myInteractions.map(i => [i.postId, { type: i.type, createdAt: i.createdAt }]))
 
@@ -225,11 +201,9 @@ export class RecommendationCfService {
           this.commonService._getInteractionWeight(overlap.type) *
           this.commonService._getRecencyWeight((now.getTime() - new Date(overlap.createdAt).getTime()) / (1000 * 60 * 60 * 24))
 
-        // Use minimum weight (both users need to have interacted)
         weightedIntersection += Math.min(myWeight, theirWeight)
       }
 
-      // Lấy interactions của similar user để tính union
       const theirInteractions = await this._getHighIntentInteractionWithDetails(similarUserId)
       const theirWeightedSum = theirInteractions.reduce((sum, interaction) => {
         const interactionWeight = this.commonService._getInteractionWeight(interaction.type)
@@ -238,15 +212,12 @@ export class RecommendationCfService {
         return sum + interactionWeight * recencyWeight
       }, 0)
 
-      // Weighted union
       const weightedUnion = myWeightedSum + theirWeightedSum - weightedIntersection
 
-      if (weightedUnion === 0 || overlaps.length < 2) continue // Minimum 2 overlaps
+      if (weightedUnion === 0 || overlaps.length < 2) continue
 
       const similarity = weightedIntersection / weightedUnion
 
-      // Filter: Giảm threshold xuống 0.03 để có nhiều similar users hơn, cải thiện coverage
-      // Đồng thời yêu cầu tối thiểu 2 overlaps (đã có ở trên)
       if (similarity > 0.03) {
         similarUsers.push({
           userId: similarUserId,
@@ -256,19 +227,14 @@ export class RecommendationCfService {
       }
     }
 
-    // Sort và return top 50 (tăng từ 30) để có nhiều candidates hơn
     similarUsers.sort((a, b) => b.similarity - a.similarity)
     return similarUsers.slice(0, 50)
   }
 
-  /**
-   * Lấy High Intent Interactions với details (type, createdAt)
-   */
   private async _getHighIntentInteractionWithDetails(userId: string): Promise<Array<{ postId: string; type: string; createdAt: Date }>> {
     const thirtyDaysAgo = new Date()
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
 
-    // Standard interactions
     const standardInteractions = await this.userActivityModel
       .find({
         userId,
@@ -281,7 +247,6 @@ export class RecommendationCfService {
       .select('postId userActivityType createdAt')
       .lean()
 
-    // Reply interactions
     const replyInteractions = await this.commonService.postModel
       .find({
         author: userId,
@@ -291,7 +256,6 @@ export class RecommendationCfService {
       .select('parentId createdAt')
       .lean()
 
-    // High dwell time views
     const highDwellTimeViews = await this.userActivityModel
       .aggregate([
         {
@@ -347,7 +311,6 @@ export class RecommendationCfService {
       })),
     ]
 
-    // Remove duplicates (keep most recent)
     const uniqueInteractions = new Map<string, { postId: string; type: string; createdAt: Date }>()
     for (const interaction of allInteractions) {
       const existing = uniqueInteractions.get(interaction.postId)
@@ -359,9 +322,6 @@ export class RecommendationCfService {
     return Array.from(uniqueInteractions.values())
   }
 
-  /**
-   * Lấy CF Candidates với interaction details
-   */
   private async _getCFCandidatesWithDetails(
     similarUsers: Array<{ userId: string; similarity: number; overlapCount: number }>,
     myInteractions: string[],
@@ -375,7 +335,6 @@ export class RecommendationCfService {
     const similarUserIds = similarUsers.map(u => u.userId)
     const similarityMap = new Map(similarUsers.map(u => [u.userId, u.similarity]))
 
-    // Lấy activities từ similar users
     const activityAgg = this.userActivityModel.aggregate([
       {
         $match: {
@@ -396,7 +355,6 @@ export class RecommendationCfService {
       },
     ])
 
-    // Lấy replies từ similar users
     const replyAgg = this.commonService.postModel.aggregate([
       {
         $match: {
@@ -415,7 +373,6 @@ export class RecommendationCfService {
 
     const [activities, replies] = await Promise.all([activityAgg, replyAgg])
 
-    // Group by postId
     const postInteractions = new Map<string, Array<{ userId: string; type: string; createdAt: Date; similarity: number }>>()
 
     activities.forEach(activity => {
@@ -446,7 +403,6 @@ export class RecommendationCfService {
       })
     })
 
-    // Load posts
     const postIds = Array.from(postInteractions.keys()).slice(0, poolLimit)
     const posts = await this.commonService.postModel
       .find({ _id: { $in: postIds }, isHidden: false, parentId: null, isReply: false })
@@ -467,27 +423,21 @@ export class RecommendationCfService {
       .filter(Boolean)
   }
 
-  /**
-   * Tính CF Score với multi-signal formula
-   */
-  private async _calculateCFScore(
+  private _calculateCFScore(
     post: Post,
     interactions: Array<{ userId: string; type: string; createdAt: Date; similarity: number }>,
     similarUsers: Array<{ userId: string; similarity: number; overlapCount: number }>,
     myInteractions: Array<{ postId: string; type: string; createdAt: Date }>,
-  ): Promise<{
+  ): {
     similarityScore: number
     qualityScore: number
     recencyScore: number
     popularityScore: number
     timeDecay: number
     finalScore: number
-  }> {
+  } {
     const now = new Date()
 
-    // 1. User Similarity Score (45% - tăng từ 40%)
-    // Weighted average similarity của users tương tác với post
-    // Sử dụng weighted average thay vì simple average để ưu tiên users có similarity cao hơn
     let similarityScore = 0
     if (interactions.length > 0) {
       const totalSimilarity = interactions.reduce((sum, i) => sum + i.similarity * i.similarity, 0) // Weighted by similarity^2
@@ -495,7 +445,7 @@ export class RecommendationCfService {
       similarityScore = totalWeight > 0 ? totalSimilarity / totalWeight : 0
     }
 
-    // 2. Interaction Quality Score (30%)
+    // 30%
     let qualityScore = 0
     if (interactions.length > 0) {
       const weightedSum = interactions.reduce((sum, interaction) => {
@@ -507,7 +457,7 @@ export class RecommendationCfService {
       qualityScore = weightedSum / interactions.length
     }
 
-    // 3. Recency Score (20%)
+    // 20%
     let recencyScore = 0
     if (interactions.length > 0) {
       const recencySum = interactions.reduce((sum, interaction) => {
@@ -518,24 +468,17 @@ export class RecommendationCfService {
       recencyScore = recencySum / interactions.length
     }
 
-    // 4. Popularity Boost (10%)
+    // 10%
     const uniqueSimilarUsers = new Set(interactions.map(i => i.userId)).size
     const totalSimilarUsers = similarUsers.length
     const popularityScore = totalSimilarUsers > 0 ? Math.log(1 + uniqueSimilarUsers) / Math.log(1 + totalSimilarUsers) : 0
 
-    // 5. Time Decay
     const timeDecay = this.commonService._calculateTimeDecayScore(post)
     const hoursDiff = (now.getTime() - new Date(post.createdAt).getTime()) / (1000 * 60 * 60)
     const recencyBonus = hoursDiff < 24 ? 0.1 : hoursDiff < 168 ? 0.05 : 0
 
-    // 6. Final Score - Cải thiện weights
     const finalScore =
-      similarityScore * 0.45 + // Tăng từ 0.4
-      qualityScore * 0.3 +
-      recencyScore * 0.15 + // Giảm từ 0.2
-      popularityScore * 0.1 +
-      timeDecay * 0.1 +
-      recencyBonus
+      similarityScore * 0.45 + qualityScore * 0.3 + recencyScore * 0.15 + popularityScore * 0.1 + timeDecay * 0.1 + recencyBonus
 
     return {
       similarityScore,
