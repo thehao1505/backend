@@ -158,10 +158,10 @@ export class RecommendationService {
   async search(userId: string, query: QuerySearchDto) {
     const { page, limit, text } = query
     const embedding = await this.embeddingService.generateEmbedding(text)
-    const normalizedEmbedding = VectorUtil.normalize(embedding)
+    // const normalizedEmbedding = VectorUtil.normalize(embedding)
 
     const [similar, users] = await Promise.all([
-      this.qdrantService.searchSimilar(configs.postCollectionName, normalizedEmbedding, Number(limit), Number(page), {}),
+      this.qdrantService.searchSimilar(configs.postCollectionName, embedding, Number(limit), Number(page), {}),
       text
         ? this.userModel
             .find({ $text: { $search: text } })
@@ -183,7 +183,7 @@ export class RecommendationService {
     const similarPosts = similarPostIds.map(id => idToPostMap.get(id)).filter(Boolean)
 
     if (text) {
-      this.postService.searchActivity(text, userId, normalizedEmbedding).catch(err => {
+      this.postService.searchActivity(text, userId, embedding).catch(err => {
         this.logger.warn(`Error logging search activity: ${err.message}`)
       })
     }
